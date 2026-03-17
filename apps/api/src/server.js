@@ -118,7 +118,17 @@ function validateQrToken(token, projectId) {
 }
 
 function getPublicWebUrl(req) {
-  return req.get('origin') || process.env.PUBLIC_WEB_URL || 'http://localhost:5173'
+  const configuredPublicUrl = process.env.PUBLIC_WEB_URL?.trim()
+  if (configuredPublicUrl) {
+    return configuredPublicUrl.replace(/\/+$/, '')
+  }
+
+  const requestOrigin = req.get('origin')?.trim()
+  if (requestOrigin) {
+    return requestOrigin.replace(/\/+$/, '')
+  }
+
+  return 'http://localhost:5173'
 }
 
 function getProjectCrew(projectId) {
@@ -1020,6 +1030,7 @@ app.get('/api/admin/reports/summary', requireRoles('ADMIN'), (req, res) => {
     SELECT
       p.name AS project_name,
       u.name AS crew_name,
+      date(ar.created_at) AS summary_date,
       MIN(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END) AS attendance_check_in,
       MAX(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END) AS attendance_check_out,
       MIN(CASE WHEN ar.flow_type = 'OVERTIME' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END) AS overtime_check_in,
@@ -1028,8 +1039,8 @@ app.get('/api/admin/reports/summary', requireRoles('ADMIN'), (req, res) => {
     JOIN users u ON u.id = ar.user_id
     JOIN projects p ON p.id = ar.project_id
     WHERE ${filters.join(' AND ')}
-    GROUP BY ar.project_id, ar.user_id, p.name, u.name
-    ORDER BY p.name, u.name
+    GROUP BY ar.project_id, ar.user_id, p.name, u.name, date(ar.created_at)
+    ORDER BY p.name, u.name, summary_date
   `).all(...params)
 
   res.json({ summary })
@@ -1064,6 +1075,7 @@ app.get('/api/admin/reports/summary/export', requireRoles('ADMIN'), (req, res) =
     SELECT
       p.name AS nama_project,
       u.name AS nama_crew,
+      date(ar.created_at) AS tanggal,
       strftime('%H:%M', MIN(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END)) AS jam_masuk,
       strftime('%H:%M', MAX(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END)) AS jam_keluar,
       strftime('%H:%M', MIN(CASE WHEN ar.flow_type = 'OVERTIME' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END)) AS jam_masuk_lembur,
@@ -1072,9 +1084,12 @@ app.get('/api/admin/reports/summary/export', requireRoles('ADMIN'), (req, res) =
     JOIN users u ON u.id = ar.user_id
     JOIN projects p ON p.id = ar.project_id
     WHERE ${filters.join(' AND ')}
-    GROUP BY ar.project_id, ar.user_id, p.name, u.name
-    ORDER BY p.name, u.name
-  `).all(...params)
+    GROUP BY ar.project_id, ar.user_id, p.name, u.name, date(ar.created_at)
+    ORDER BY p.name, u.name, tanggal
+  `).all(...params).map((row) => ({
+    ...row,
+    nama_crew: `${row.nama_crew} - ${row.tanggal}`,
+  }))
 
   const header = [
     'Nama Project',

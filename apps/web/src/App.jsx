@@ -2,7 +2,42 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import dayjs from 'dayjs'
 
-const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:4000/api`
+function isLocalApiHost(hostname) {
+  if (!hostname) {
+    return false
+  }
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1') {
+    return true
+  }
+
+  if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
+    return true
+  }
+
+  const privateRangeMatch = hostname.match(/^172\.(\d{1,3})\./)
+  if (privateRangeMatch) {
+    const subnet = Number(privateRangeMatch[1])
+    return subnet >= 16 && subnet <= 31
+  }
+
+  return false
+}
+
+function getDefaultApiBase() {
+  if (typeof window === 'undefined') {
+    return 'http://localhost:4000/api'
+  }
+
+  const { protocol, hostname, origin } = window.location
+  if (isLocalApiHost(hostname)) {
+    return `${protocol}//${hostname}:4000/api`
+  }
+
+  return `${origin}/api`
+}
+
+const API_BASE = import.meta.env.VITE_API_URL || getDefaultApiBase()
 
 const http = axios.create({
   baseURL: API_BASE,
@@ -1239,9 +1274,9 @@ function App() {
                       </thead>
                       <tbody>
                         {summaryRows.map((row, index) => (
-                          <tr key={`${row.project_name}-${row.crew_name}-${index}`}>
+                          <tr key={`${row.project_name}-${row.crew_name}-${row.summary_date || index}`}>
                             <td>{row.project_name}</td>
-                            <td>{row.crew_name}</td>
+                            <td>{`${row.crew_name}${row.summary_date ? ` - ${formatDate(row.summary_date)}` : ''}`}</td>
                             <td>{formatTime(row.attendance_check_in)}</td>
                             <td>{formatTime(row.attendance_check_out)}</td>
                             <td>{formatTime(row.overtime_check_in)}</td>
@@ -1813,6 +1848,10 @@ function App() {
 
 function formatDateTime(value) {
   return dayjs(value).format('DD MMM YYYY HH:mm')
+}
+
+function formatDate(value) {
+  return dayjs(value).format('DD MMM YYYY')
 }
 
 function formatTime(value) {
