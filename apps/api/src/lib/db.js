@@ -13,6 +13,7 @@ db.pragma('foreign_keys = ON')
 
 const now = () => new Date().toISOString()
 const today = () => dayjs().format('YYYY-MM-DD')
+const SUPPORTED_USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG']
 
 export function initializeDatabase() {
   db.exec(`
@@ -20,7 +21,7 @@ export function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       phone TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW')),
+      role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG')),
       password TEXT,
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       created_at TEXT NOT NULL
@@ -109,8 +110,105 @@ export function initializeDatabase() {
   `)
 
   ensureUserColumns()
+  repairLegacyUserForeignKeys()
+  ensureUserRoleConstraint()
+  ensureUserColumns()
 
   seedDatabase()
+}
+
+function ensureUserRoleConstraint() {
+  const tableInfo = db.prepare(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'users'
+  `).get()
+
+  const tableSql = tableInfo?.sql || ''
+  const hasAllRoles = SUPPORTED_USER_ROLES.every((role) => tableSql.includes(`'${role}'`))
+  if (hasAllRoles) {
+    return
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF')
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL UNIQUE,
+        role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG')),
+        password TEXT,
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        created_at TEXT NOT NULL,
+        ktp TEXT
+      )
+    `)
+
+    db.exec(`
+      INSERT INTO users_new (id, name, phone, role, password, status, created_at, ktp)
+      SELECT id, name, phone, role, password, status, created_at, ktp
+      FROM users
+    `)
+
+    db.exec('DROP TABLE users')
+    db.exec('ALTER TABLE users_new RENAME TO users')
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON')
+  }
+}
+
+function repairLegacyUserForeignKeys() {
+  const tables = ['projects', 'project_assignments', 'daily_qr_tokens', 'overtime_assignments', 'attendance_records', 'audit_logs']
+
+  const brokenTables = tables.filter((tableName) => {
+    const fks = db.prepare(`PRAGMA foreign_key_list(${tableName})`).all()
+    return fks.some((fk) => fk.table === 'users_legacy')
+  })
+
+  if (brokenTables.length === 0) {
+    return
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF')
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    for (const tableName of brokenTables) {
+      const createRow = db.prepare(`
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+      `).get(tableName)
+
+      const createSql = createRow?.sql || ''
+      const fixedTableName = `${tableName}_fixed`
+      const fixedCreateSql = createSql
+        .replace(new RegExp(`CREATE TABLE\\s+${tableName}`, 'i'), `CREATE TABLE ${fixedTableName}`)
+        .replaceAll('users_legacy', 'users')
+
+      db.exec(fixedCreateSql)
+
+      const columns = db.prepare(`PRAGMA table_info(${tableName})`).all().map((column) => column.name)
+      const columnList = columns.join(', ')
+      db.exec(`INSERT INTO ${fixedTableName} (${columnList}) SELECT ${columnList} FROM ${tableName}`)
+      db.exec(`DROP TABLE ${tableName}`)
+      db.exec(`ALTER TABLE ${fixedTableName} RENAME TO ${tableName}`)
+    }
+
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON')
+  }
 }
 
 function ensureUserColumns() {

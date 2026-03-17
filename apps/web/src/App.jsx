@@ -43,6 +43,9 @@ const http = axios.create({
   baseURL: API_BASE,
 })
 
+const USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG']
+const NO_PASSWORD_ROLES = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG'])
+
 function App() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const tokenFromUrl = searchParams.get('token') || ''
@@ -397,7 +400,7 @@ function App() {
     try {
       await http.post('/admin/users', {
         ...userForm,
-        password: userForm.role === 'CREW' ? null : (userForm.password || null),
+        password: NO_PASSWORD_ROLES.has(userForm.role) ? null : (userForm.password || null),
       }, { headers: authHeader() })
       setUserForm({ name: '', ktp: '', phone: '', role: 'CREW', password: '' })
       await loadAdminBootstrap()
@@ -733,6 +736,34 @@ function App() {
     }
   }
 
+  async function changePicPassword(user) {
+    if (user.role !== 'PIC') {
+      return
+    }
+
+    const newPassword = window.prompt(`Masukkan password baru untuk PIC "${user.name}"`)?.trim()
+    if (!newPassword) {
+      return
+    }
+
+    if (newPassword.length < 3) {
+      setNotice('Password minimal 3 karakter')
+      return
+    }
+
+    const confirmed = window.confirm(`Ubah password PIC "${user.name}" sekarang?`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await http.patch(`/admin/users/${user.id}/password`, { newPassword }, { headers: authHeader() })
+      showToast('Password PIC berhasil diubah', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal mengubah password PIC'))
+    }
+  }
+
   async function handleChangePassword(event) {
     event.preventDefault()
     
@@ -1054,11 +1085,11 @@ function App() {
                     <input value={userForm.phone} onChange={(event) => setUserForm((current) => ({ ...current, phone: event.target.value }))} />
                     <label>Role</label>
                     <select value={userForm.role} onChange={(event) => setUserForm((current) => ({ ...current, role: event.target.value }))}>
-                      <option value="CREW">Crew</option>
-                      <option value="PIC">PIC</option>
-                      <option value="ADMIN">Admin</option>
+                      {USER_ROLES.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
                     </select>
-                    {userForm.role !== 'CREW' && (
+                    {!NO_PASSWORD_ROLES.has(userForm.role) && (
                       <>
                         <label>Password (khusus Admin/PIC)</label>
                         <input value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} />
@@ -1068,13 +1099,13 @@ function App() {
 
                     <hr />
                     <p className="section-label">Upload massal crew</p>
-                    <label>File CSV (name, ktp, phone)</label>
+                    <label>File CSV (name, ktp, phone, role)</label>
                     <input
                       type="file"
                       accept=".csv,text/csv"
                       onChange={(event) => setCrewUploadFile(event.target.files?.[0] || null)}
                     />
-                    <p className="hint">Khusus untuk role CREW. Password otomatis kosong.</p>
+                    <p className="hint">Role mengikuti file upload (CREW / HEAD CREW / KASIR / SPG / Back Up SPG). Password tetap kosong.</p>
                     <button type="button" onClick={uploadCrewUsers} disabled={crewUploadLoading}>
                       {crewUploadLoading ? 'Mengupload...' : 'Upload crew'}
                     </button>
@@ -1097,9 +1128,9 @@ function App() {
                       />
                       <select value={userListFilters.role} onChange={(event) => setUserListFilters((current) => ({ ...current, role: event.target.value }))}>
                         <option value="">Semua role</option>
-                        <option value="ADMIN">Admin</option>
-                        <option value="PIC">PIC</option>
-                        <option value="CREW">Crew</option>
+                        {USER_ROLES.map((role) => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
                       </select>
                       <select value={userListFilters.status} onChange={(event) => setUserListFilters((current) => ({ ...current, status: event.target.value }))}>
                         <option value="">Semua status</option>
@@ -1162,6 +1193,11 @@ function App() {
                                 ) : (
                                   <div className="action-row">
                                     <button type="button" className="secondary-action" onClick={() => startEditUser(user)}>Edit</button>
+                                    {user.role === 'PIC' && (
+                                      <button type="button" className="secondary-action" onClick={() => changePicPassword(user)}>
+                                        Password PIC
+                                      </button>
+                                    )}
                                     <button type="button" className="secondary-action" onClick={() => toggleUserStatus(user)}>
                                       {user.status === 'ACTIVE' ? 'Non-aktif' : 'Aktifkan'}
                                     </button>

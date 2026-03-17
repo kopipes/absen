@@ -46,12 +46,19 @@ const userSchema = z.object({
   name: z.string().min(2),
   ktp: z.string().min(8),
   phone: z.string().min(8),
-  role: z.enum(['ADMIN', 'PIC', 'CREW']),
+  role: z.enum(['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG']),
   password: z.string().min(3).nullable().optional(),
 })
 
+const crewLikeRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG'])
+const uploadAllowedRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG'])
+
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(3),
+  newPassword: z.string().min(3),
+})
+
+const adminChangePicPasswordSchema = z.object({
   newPassword: z.string().min(3),
 })
 
@@ -191,12 +198,13 @@ function parseCrewUploadCsv(content) {
   const dataLines = hasHeader ? lines.slice(1) : lines
 
   return dataLines.map((line, index) => {
-    const [name = '', ktp = '', phone = ''] = line.split(/[;,]/).map((value) => value.trim())
+    const [name = '', ktp = '', phone = '', role = 'CREW'] = line.split(/[;,]/).map((value) => value.trim())
     return {
       line: hasHeader ? index + 2 : index + 1,
       name,
       ktp,
       phone,
+      role,
     }
   })
 }
@@ -318,7 +326,7 @@ app.post('/api/public/attendance', upload.single('photo'), (req, res) => {
   }
 
   const user = db.prepare('SELECT id, name, role, status FROM users WHERE id = ?').get(parsed.data.userId)
-  if (!user || user.role !== 'CREW' || user.status !== 'ACTIVE') {
+  if (!user || !crewLikeRoles.has(user.role) || user.status !== 'ACTIVE') {
     return res.status(404).json({ message: 'Crew tidak ditemukan' })
   }
 
@@ -471,28 +479,34 @@ app.post('/api/admin/users/upload-crew', requireRoles('ADMIN'), upload.single('f
 
     const insertUser = db.prepare(`
       INSERT INTO users (name, ktp, phone, role, password, status, created_at)
-      VALUES (?, ?, ?, 'CREW', NULL, 'ACTIVE', ?)
+      VALUES (?, ?, ?, ?, NULL, 'ACTIVE', ?)
     `)
 
     const createdIds = []
     const errors = []
 
     for (const row of rows) {
+      const normalizedRole = String(row.role || 'CREW').toUpperCase()
       const parsed = userSchema.safeParse({
         name: row.name,
         ktp: row.ktp,
         phone: row.phone,
-        role: 'CREW',
+        role: normalizedRole,
         password: null,
       })
 
       if (!parsed.success) {
-        errors.push({ line: row.line, message: 'Format data tidak valid (butuh kolom: name, ktp, phone)' })
+        errors.push({ line: row.line, message: 'Format data tidak valid (butuh kolom: name, ktp, phone, role)' })
+        continue
+      }
+
+      if (!uploadAllowedRoles.has(parsed.data.role)) {
+        errors.push({ line: row.line, message: `Role ${parsed.data.role} tidak diizinkan untuk upload` })
         continue
       }
 
       try {
-        const result = insertUser.run(row.name, row.ktp, row.phone, getNowIso())
+        const result = insertUser.run(row.name, row.ktp, row.phone, parsed.data.role, getNowIso())
         createdIds.push(Number(result.lastInsertRowid))
       } catch (error) {
         errors.push({ line: row.line, message: error.message })
@@ -500,7 +514,7 @@ app.post('/api/admin/users/upload-crew', requireRoles('ADMIN'), upload.single('f
     }
 
     for (const userId of createdIds) {
-      createAuditLog(req.user.id, 'CREATE_USER', 'user', userId, { role: 'CREW', source: 'UPLOAD_CSV' })
+      createAuditLog(req.user.id, 'CREATE_USER', 'user', userId, { source: 'UPLOAD_CSV' })
     }
 
     if (createdIds.length === 0) {
@@ -587,6 +601,35 @@ app.delete('/api/admin/users/:id', requireRoles('ADMIN'), (req, res) => {
     res.json({ message: 'User berhasil dihapus' })
   } catch (error) {
     res.status(500).json({ message: 'Gagal menghapus user' })
+  }
+})
+
+app.patch('/api/admin/users/:id/password', requireRoles('ADMIN'), (req, res) => {
+  const userId = Number(req.params.id)
+  if (Number.isNaN(userId)) {
+    return res.status(400).json({ message: 'ID user tidak valid' })
+  }
+
+  const parsed = adminChangePicPasswordSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Password baru minimal 3 karakter' })
+  }
+
+  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId)
+  if (!user) {
+    return res.status(404).json({ message: 'User tidak ditemukan' })
+  }
+
+  if (user.role !== 'PIC') {
+    return res.status(400).json({ message: 'Hanya password PIC yang bisa diubah oleh admin' })
+  }
+
+  try {
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(parsed.data.newPassword, userId)
+    createAuditLog(req.user.id, 'ADMIN_CHANGE_PIC_PASSWORD', 'user', userId, { newPassword: '***' })
+    res.json({ message: 'Password PIC berhasil diubah' })
+  } catch {
+    res.status(500).json({ message: 'Gagal mengubah password PIC' })
   }
 })
 
