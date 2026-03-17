@@ -46,12 +46,15 @@ const userSchema = z.object({
   name: z.string().min(2),
   ktp: z.string().min(8),
   phone: z.string().min(8),
-  role: z.enum(['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG']),
+  role: z.enum(['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']),
   password: z.string().min(3).nullable().optional(),
 })
 
-const crewLikeRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG'])
-const uploadAllowedRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG'])
+const assignmentRoles = ['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
+const crewLikeRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
+const uploadAllowedRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
+const crewAssignmentRoles = assignmentRoles.filter((role) => role !== 'PIC')
+const crewAssignmentRolesSql = crewAssignmentRoles.map((role) => `'${role}'`).join(', ')
 
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(3),
@@ -64,7 +67,7 @@ const adminChangePicPasswordSchema = z.object({
 
 const assignmentSchema = z.object({
   userId: z.number().int(),
-  assignmentRole: z.enum(['PIC', 'CREW']),
+  assignmentRole: z.enum(assignmentRoles),
 })
 
 const assignmentUpdateSchema = z.object({
@@ -144,7 +147,7 @@ function getProjectCrew(projectId) {
     SELECT u.id, u.name, u.phone
     FROM project_assignments pa
     JOIN users u ON u.id = pa.user_id
-    WHERE pa.project_id = ? AND pa.assignment_role = 'CREW' AND u.status = 'ACTIVE'
+    WHERE pa.project_id = ? AND pa.assignment_role IN (${crewAssignmentRolesSql}) AND u.status = 'ACTIVE'
     ORDER BY u.name
   `).all(projectId)
 }
@@ -332,7 +335,7 @@ app.post('/api/public/attendance', upload.single('photo'), (req, res) => {
 
   const assignment = db.prepare(`
     SELECT id FROM project_assignments
-    WHERE project_id = ? AND user_id = ? AND assignment_role = 'CREW'
+    WHERE project_id = ? AND user_id = ? AND assignment_role IN (${crewAssignmentRolesSql})
   `).get(parsed.data.projectId, parsed.data.userId)
 
   if (!assignment) {
@@ -982,7 +985,7 @@ app.post('/api/pic/overtime-assignments', requireRoles('ADMIN', 'PIC'), (req, re
     const crewInProject = db.prepare(`
       SELECT id
       FROM project_assignments
-      WHERE project_id = ? AND user_id = ? AND assignment_role = 'CREW'
+      WHERE project_id = ? AND user_id = ? AND assignment_role IN (${crewAssignmentRolesSql})
     `).get(parsed.data.projectId, userId)
 
     if (!crewInProject) {
@@ -1050,7 +1053,7 @@ app.patch('/api/pic/overtime-assignments/:id', requireRoles('ADMIN', 'PIC'), (re
   const crewInProject = db.prepare(`
     SELECT id
     FROM project_assignments
-    WHERE project_id = ? AND user_id = ? AND assignment_role = 'CREW'
+    WHERE project_id = ? AND user_id = ? AND assignment_role IN (${crewAssignmentRolesSql})
   `).get(existing.project_id, parsed.data.userId)
 
   if (!crewInProject) {

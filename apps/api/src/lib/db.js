@@ -13,7 +13,8 @@ db.pragma('foreign_keys = ON')
 
 const now = () => new Date().toISOString()
 const today = () => dayjs().format('YYYY-MM-DD')
-const SUPPORTED_USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG']
+const SUPPORTED_USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
+const SUPPORTED_ASSIGNMENT_ROLES = ['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
 
 export function initializeDatabase() {
   db.exec(`
@@ -21,7 +22,7 @@ export function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       phone TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG')),
+      role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store')),
       password TEXT,
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       created_at TEXT NOT NULL
@@ -41,7 +42,7 @@ export function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
-      assignment_role TEXT NOT NULL CHECK (assignment_role IN ('PIC', 'CREW')),
+      assignment_role TEXT NOT NULL CHECK (assignment_role IN ('PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store')),
       created_at TEXT NOT NULL,
       UNIQUE (project_id, user_id, assignment_role),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -112,6 +113,7 @@ export function initializeDatabase() {
   ensureUserColumns()
   repairLegacyUserForeignKeys()
   ensureUserRoleConstraint()
+  ensureProjectAssignmentRoleConstraint()
   ensureUserColumns()
 
   seedDatabase()
@@ -139,7 +141,7 @@ function ensureUserRoleConstraint() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         phone TEXT NOT NULL UNIQUE,
-        role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG')),
+        role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store')),
         password TEXT,
         status TEXT NOT NULL DEFAULT 'ACTIVE',
         created_at TEXT NOT NULL,
@@ -155,6 +157,53 @@ function ensureUserRoleConstraint() {
 
     db.exec('DROP TABLE users')
     db.exec('ALTER TABLE users_new RENAME TO users')
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON')
+  }
+}
+
+function ensureProjectAssignmentRoleConstraint() {
+  const tableInfo = db.prepare(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'project_assignments'
+  `).get()
+
+  const tableSql = tableInfo?.sql || ''
+  const hasAllRoles = SUPPORTED_ASSIGNMENT_ROLES.every((role) => tableSql.includes(`'${role}'`))
+  if (hasAllRoles) {
+    return
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF')
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    db.exec(`
+      CREATE TABLE project_assignments_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        assignment_role TEXT NOT NULL CHECK (assignment_role IN ('PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store')),
+        created_at TEXT NOT NULL,
+        UNIQUE (project_id, user_id, assignment_role),
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `)
+
+    db.exec(`
+      INSERT INTO project_assignments_new (id, project_id, user_id, assignment_role, created_at)
+      SELECT id, project_id, user_id, assignment_role, created_at
+      FROM project_assignments
+    `)
+
+    db.exec('DROP TABLE project_assignments')
+    db.exec('ALTER TABLE project_assignments_new RENAME TO project_assignments')
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')

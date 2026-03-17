@@ -43,8 +43,9 @@ const http = axios.create({
   baseURL: API_BASE,
 })
 
-const USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG']
-const NO_PASSWORD_ROLES = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG'])
+const USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
+const ASSIGNMENT_ROLES = ['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
+const NO_PASSWORD_ROLES = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 
 function App() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), [])
@@ -1105,7 +1106,7 @@ function App() {
                       accept=".csv,text/csv"
                       onChange={(event) => setCrewUploadFile(event.target.files?.[0] || null)}
                     />
-                    <p className="hint">Role mengikuti file upload (CREW / HEAD CREW / KASIR / SPG / Back Up SPG). Password tetap kosong.</p>
+                    <p className="hint">Role mengikuti file upload (CREW / HEAD CREW / KASIR / SPG / Back Up SPG / Talent / LO / Crew Store). Password tetap kosong.</p>
                     <button type="button" onClick={uploadCrewUsers} disabled={crewUploadLoading}>
                       {crewUploadLoading ? 'Mengupload...' : 'Upload crew'}
                     </button>
@@ -1405,8 +1406,9 @@ function App() {
                     </select>
                     <label>Role assignment</label>
                     <select value={assignmentForm.assignmentRole} onChange={(event) => setAssignmentForm((current) => ({ ...current, assignmentRole: event.target.value }))}>
-                      <option value="CREW">Crew</option>
-                      <option value="PIC">PIC</option>
+                      {ASSIGNMENT_ROLES.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
                     </select>
                     <button type="submit">Simpan assignment</button>
                   </form>
