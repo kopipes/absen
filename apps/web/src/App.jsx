@@ -964,7 +964,6 @@ function App() {
               <label>Password</label>
               <input type="password" value={loginForm.password} onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))} />
               <button disabled={loadingAdmin} type="submit">{loadingAdmin ? 'Memproses...' : 'Login'}</button>
-              <p className="hint">Seed default: admin 081100000001 / admin123, PIC 081100000002 / pic123.</p>
             </form>
           ) : (
             <div className="admin-grid">
