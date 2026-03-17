@@ -256,6 +256,45 @@ button[type='submit']:hover,
   margin-bottom: 18px;
 }
 
+.summary-date-range {
+  flex: 1;
+  min-width: 320px;
+}
+
+.summary-date-range .section-label {
+  margin-bottom: 6px;
+}
+
+.summary-date-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-date-item label {
+  margin-bottom: 6px;
+}
+
+.summary-date-item input {
+  margin-bottom: 0;
+}
+
+.summary-filter-row {
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.summary-filter-row > select {
+  width: min(280px, 100%);
+  margin-bottom: 0;
+}
+
+.summary-filter-row > button[type='submit'] {
+  margin-bottom: 0;
+  min-width: 170px;
+  white-space: nowrap;
+}
+
 .two-columns {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -465,6 +504,15 @@ th {
 
   .mode-switch,
   .tab-row {
+    width: 100%;
+  }
+
+  .summary-filter-row {
+    flex-wrap: wrap;
+  }
+
+  .summary-filter-row > select,
+  .summary-filter-row > button[type='submit'] {
     width: 100%;
   }
 }

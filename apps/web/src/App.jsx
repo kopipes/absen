@@ -34,6 +34,7 @@ function App() {
   const [projectAssignments, setProjectAssignments] = useState([])
   const [overtimeAssignments, setOvertimeAssignments] = useState([])
   const [reportData, setReportData] = useState({ attendance: [], overtimeAssignments: [] })
+  const [summaryRows, setSummaryRows] = useState([])
   const [loadingAdmin, setLoadingAdmin] = useState(false)
   const [loadingAssignments, setLoadingAssignments] = useState(false)
   const [loadingOvertimeAssignments, setLoadingOvertimeAssignments] = useState(false)
@@ -49,6 +50,11 @@ function App() {
   const [qrForm, setQrForm] = useState({ projectId: '', qrDate: dayjs().format('YYYY-MM-DD') })
   const [overtimeForm, setOvertimeForm] = useState({ projectId: '', assignmentDate: dayjs().format('YYYY-MM-DD'), userIds: [] })
   const [reportForm, setReportForm] = useState({ projectId: '', date: dayjs().format('YYYY-MM-DD') })
+  const [summaryForm, setSummaryForm] = useState({
+    projectId: '',
+    startDate: dayjs().format('YYYY-MM-DD'),
+    endDate: dayjs().format('YYYY-MM-DD'),
+  })
   const [userListFilters, setUserListFilters] = useState({ search: '', role: '', status: '', project: '' })
 
   const filteredCrew = useMemo(() => {
@@ -238,6 +244,7 @@ function App() {
     setQrForm((current) => ({ ...current, projectId: current.projectId || defaultProjectId }))
     setOvertimeForm((current) => ({ ...current, projectId: current.projectId || defaultProjectId }))
     setReportForm((current) => ({ ...current, projectId: current.projectId || defaultProjectId }))
+    setSummaryForm((current) => ({ ...current, projectId: current.projectId || defaultProjectId }))
 
     if (defaultProjectId) {
       await loadProjectCrew(defaultProjectId, token)
@@ -247,6 +254,7 @@ function App() {
       }
       if (userRole === 'ADMIN') {
         await loadReports({ projectId: defaultProjectId, date: reportForm.date }, token)
+        await loadSummary({ projectId: defaultProjectId, startDate: summaryForm.startDate, endDate: summaryForm.endDate }, token)
         await loadActiveDailyQrs(token)
       }
     }
@@ -323,7 +331,23 @@ function App() {
       headers: authHeader(token),
       params,
     })
-    setReportData(data)
+    setReportData({
+      attendance: data.attendance || [],
+      overtimeAssignments: data.overtimeAssignments || [],
+    })
+  }
+
+  async function loadSummary(params, token = authState.token) {
+    if (!token) {
+      setSummaryRows([])
+      return
+    }
+
+    const { data } = await http.get('/admin/reports/summary', {
+      headers: authHeader(token),
+      params,
+    })
+    setSummaryRows(data.summary || [])
   }
 
   async function createUser(event) {
@@ -509,6 +533,20 @@ function App() {
     }
   }
 
+  async function refreshSummary(event) {
+    event?.preventDefault()
+    try {
+      await loadSummary({
+        projectId: summaryForm.projectId || undefined,
+        startDate: summaryForm.startDate,
+        endDate: summaryForm.endDate,
+      })
+      setNotice('Rangkuman berhasil dimuat ulang.')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal memuat rangkuman'))
+    }
+  }
+
   async function downloadCsv() {
     try {
       const { data } = await http.get('/admin/reports/export', {
@@ -528,6 +566,33 @@ function App() {
       window.URL.revokeObjectURL(blobUrl)
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal export CSV'))
+    }
+  }
+
+  async function downloadSummaryCsv() {
+    try {
+      const { data } = await http.get('/admin/reports/summary/export', {
+        headers: authHeader(),
+        params: {
+          startDate: summaryForm.startDate,
+          endDate: summaryForm.endDate,
+          projectId: summaryForm.projectId || undefined,
+        },
+        responseType: 'blob',
+      })
+
+      const blobUrl = window.URL.createObjectURL(data)
+      const link = document.createElement('a')
+      const selectedProjectName = summaryForm.projectId
+        ? adminData.projects.find((project) => String(project.id) === String(summaryForm.projectId))?.name
+        : 'Semua-Project'
+      const safeProjectName = String(selectedProjectName || 'Semua-Project').replace(/[^a-zA-Z0-9-_]+/g, '-')
+      link.href = blobUrl
+      link.download = `rangkuman-${safeProjectName}-${summaryForm.startDate}-to-${summaryForm.endDate}.csv`
+      link.click()
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal export rangkuman'))
     }
   }
 
@@ -617,6 +682,7 @@ function App() {
     setProjectAssignments([])
     setOvertimeAssignments([])
     setReportData({ attendance: [], overtimeAssignments: [] })
+    setSummaryRows([])
     setQrResult(null)
     setActiveDailyQrs([])
     setMode('crew')
@@ -789,6 +855,11 @@ function App() {
                 {canManageAdmin && (
                   <button className={adminPage === 'report' ? 'active' : ''} onClick={() => setAdminPage('report')} type="button">
                     Report
+                  </button>
+                )}
+                {canManageAdmin && (
+                  <button className={adminPage === 'summary' ? 'active' : ''} onClick={() => setAdminPage('summary')} type="button">
+                    Rangkuman
                   </button>
                 )}
               </div>}
@@ -969,6 +1040,80 @@ function App() {
                       </div>
                     </div>
                   </div>
+                </div>
+              ) : adminPage === 'summary' && canManageAdmin ? (
+                <div className="card">
+                  <div className="panel-header">
+                    <div>
+                      <p className="section-label">Rangkuman</p>
+                      <h2>Rekap jam crew per project</h2>
+                    </div>
+                    <button className="secondary-action" onClick={downloadSummaryCsv} type="button">
+                      Export CSV
+                    </button>
+                  </div>
+
+                  <form className="filter-row summary-filter-row" onSubmit={refreshSummary}>
+                    <select
+                      value={summaryForm.projectId}
+                      onChange={(event) => setSummaryForm((current) => ({ ...current, projectId: event.target.value }))}
+                    >
+                      <option value="">Semua project</option>
+                      {adminData.projects.map((project) => (
+                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
+                      ))}
+                    </select>
+                    <div className="summary-date-range">
+                      <p className="section-label">Date Range</p>
+                      <div className="summary-date-fields">
+                        <div className="summary-date-item">
+                          <label>Start</label>
+                          <input
+                            type="date"
+                            value={summaryForm.startDate}
+                            onChange={(event) => setSummaryForm((current) => ({ ...current, startDate: event.target.value }))}
+                          />
+                        </div>
+                        <div className="summary-date-item">
+                          <label>End</label>
+                          <input
+                            type="date"
+                            value={summaryForm.endDate}
+                            onChange={(event) => setSummaryForm((current) => ({ ...current, endDate: event.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <button type="submit">Muat rangkuman</button>
+                  </form>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Nama Project</th>
+                          <th>Nama Crew</th>
+                          <th>Jam Masuk</th>
+                          <th>Jam Keluar</th>
+                          <th>Jam Masuk lembur</th>
+                          <th>Jam Keluar lembur</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summaryRows.map((row, index) => (
+                          <tr key={`${row.project_name}-${row.crew_name}-${index}`}>
+                            <td>{row.project_name}</td>
+                            <td>{row.crew_name}</td>
+                            <td>{formatTime(row.attendance_check_in)}</td>
+                            <td>{formatTime(row.attendance_check_out)}</td>
+                            <td>{formatTime(row.overtime_check_in)}</td>
+                            <td>{formatTime(row.overtime_check_out)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {summaryRows.length === 0 && <p className="hint">Belum ada data rangkuman pada filter ini.</p>}
                 </div>
               ) : adminPage === 'assignment-management' && canManageAdmin ? (
                 <div className="grid">
@@ -1469,6 +1614,14 @@ function App() {
 
 function formatDateTime(value) {
   return dayjs(value).format('DD MMM YYYY HH:mm')
+}
+
+function formatTime(value) {
+  if (!value) {
+    return '-'
+  }
+
+  return dayjs(value).format('HH:mm')
 }
 
 function normalizeAdminUsers(users = []) {

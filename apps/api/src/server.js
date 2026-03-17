@@ -898,6 +898,124 @@ app.get('/api/admin/reports', requireRoles('ADMIN'), (req, res) => {
   res.json({ attendance, overtimeAssignments })
 })
 
+app.get('/api/admin/reports/summary', requireRoles('ADMIN'), (req, res) => {
+  const startDate = String(req.query.startDate || getTodayString())
+  const endDate = String(req.query.endDate || startDate)
+  const projectId = req.query.projectId ? Number(req.query.projectId) : null
+
+  if (startDate > endDate) {
+    return res.status(400).json({ message: 'Tanggal awal tidak boleh lebih besar dari tanggal akhir' })
+  }
+
+  const filters = ['date(ar.created_at) BETWEEN ? AND ?']
+  const params = [startDate, endDate]
+
+  if (projectId) {
+    if (!ensurePicProjectAccess(req.user, projectId)) {
+      return res.status(403).json({ message: 'Anda tidak berhak melihat project ini' })
+    }
+    filters.push('ar.project_id = ?')
+    params.push(projectId)
+  } else if (req.user.role === 'PIC') {
+    filters.push(`ar.project_id IN (
+      SELECT project_id FROM project_assignments WHERE user_id = ? AND assignment_role = 'PIC'
+    )`)
+    params.push(req.user.id)
+  }
+
+  const summary = db.prepare(`
+    SELECT
+      p.name AS project_name,
+      u.name AS crew_name,
+      MIN(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END) AS attendance_check_in,
+      MAX(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END) AS attendance_check_out,
+      MIN(CASE WHEN ar.flow_type = 'OVERTIME' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END) AS overtime_check_in,
+      MAX(CASE WHEN ar.flow_type = 'OVERTIME' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END) AS overtime_check_out
+    FROM attendance_records ar
+    JOIN users u ON u.id = ar.user_id
+    JOIN projects p ON p.id = ar.project_id
+    WHERE ${filters.join(' AND ')}
+    GROUP BY ar.project_id, ar.user_id, p.name, u.name
+    ORDER BY p.name, u.name
+  `).all(...params)
+
+  res.json({ summary })
+})
+
+app.get('/api/admin/reports/summary/export', requireRoles('ADMIN'), (req, res) => {
+  const startDate = String(req.query.startDate || getTodayString())
+  const endDate = String(req.query.endDate || startDate)
+  const projectId = req.query.projectId ? Number(req.query.projectId) : null
+
+  if (startDate > endDate) {
+    return res.status(400).json({ message: 'Tanggal awal tidak boleh lebih besar dari tanggal akhir' })
+  }
+
+  const filters = ['date(ar.created_at) BETWEEN ? AND ?']
+  const params = [startDate, endDate]
+
+  if (projectId) {
+    if (!ensurePicProjectAccess(req.user, projectId)) {
+      return res.status(403).json({ message: 'Anda tidak berhak melihat project ini' })
+    }
+    filters.push('ar.project_id = ?')
+    params.push(projectId)
+  } else if (req.user.role === 'PIC') {
+    filters.push(`ar.project_id IN (
+      SELECT project_id FROM project_assignments WHERE user_id = ? AND assignment_role = 'PIC'
+    )`)
+    params.push(req.user.id)
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      p.name AS nama_project,
+      u.name AS nama_crew,
+      strftime('%H:%M', MIN(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END)) AS jam_masuk,
+      strftime('%H:%M', MAX(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END)) AS jam_keluar,
+      strftime('%H:%M', MIN(CASE WHEN ar.flow_type = 'OVERTIME' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END)) AS jam_masuk_lembur,
+      strftime('%H:%M', MAX(CASE WHEN ar.flow_type = 'OVERTIME' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END)) AS jam_keluar_lembur
+    FROM attendance_records ar
+    JOIN users u ON u.id = ar.user_id
+    JOIN projects p ON p.id = ar.project_id
+    WHERE ${filters.join(' AND ')}
+    GROUP BY ar.project_id, ar.user_id, p.name, u.name
+    ORDER BY p.name, u.name
+  `).all(...params)
+
+  const header = [
+    'Nama Project',
+    'Nama Crew',
+    'Jam Masuk',
+    'Jam Keluar',
+    'Jam Masuk Lembur',
+    'Jam Keluar Lembur',
+  ]
+
+  const valueMap = {
+    'Nama Project': 'nama_project',
+    'Nama Crew': 'nama_crew',
+    'Jam Masuk': 'jam_masuk',
+    'Jam Keluar': 'jam_keluar',
+    'Jam Masuk Lembur': 'jam_masuk_lembur',
+    'Jam Keluar Lembur': 'jam_keluar_lembur',
+  }
+
+  const csvLines = [
+    header.join(','),
+    ...rows.map((row) => header.map((key) => `"${String(row[valueMap[key]] ?? '').replaceAll('"', '""')}"`).join(',')),
+  ]
+
+  const selectedProjectName = projectId
+    ? db.prepare('SELECT name FROM projects WHERE id = ?').get(projectId)?.name
+    : null
+  const safeProjectName = (selectedProjectName || 'Semua-Project').replace(/[^a-zA-Z0-9-_]+/g, '-')
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="rangkuman-${safeProjectName}-${startDate}-to-${endDate}.csv"`)
+  res.send(csvLines.join('\n'))
+})
+
 app.get('/api/admin/reports/export', requireRoles('ADMIN'), (req, res) => {
   const date = req.query.date || getTodayString()
   const projectId = req.query.projectId ? Number(req.query.projectId) : null
