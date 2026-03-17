@@ -1,6 +1,7 @@
 import cors from 'cors'
 import dayjs from 'dayjs'
 import express from 'express'
+import fs from 'node:fs'
 import multer from 'multer'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -173,6 +174,31 @@ function ensurePicProjectAccess(user, projectId) {
   }
 
   return true
+}
+
+function parseCrewUploadCsv(content) {
+  const lines = String(content)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (lines.length === 0) {
+    return []
+  }
+
+  const firstColumns = lines[0].split(/[;,]/).map((value) => value.trim().toLowerCase())
+  const hasHeader = firstColumns.includes('name') || firstColumns.includes('nama')
+  const dataLines = hasHeader ? lines.slice(1) : lines
+
+  return dataLines.map((line, index) => {
+    const [name = '', ktp = '', phone = ''] = line.split(/[;,]/).map((value) => value.trim())
+    return {
+      line: hasHeader ? index + 2 : index + 1,
+      name,
+      ktp,
+      phone,
+    }
+  })
 }
 
 app.get('/api/health', (_req, res) => {
@@ -425,6 +451,75 @@ app.post('/api/admin/users', requireRoles('ADMIN'), (req, res) => {
     res.status(201).json({ id: result.lastInsertRowid })
   } catch (error) {
     res.status(409).json({ message: error.message })
+  }
+})
+
+app.post('/api/admin/users/upload-crew', requireRoles('ADMIN'), upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'File CSV wajib diunggah' })
+  }
+
+  const filePath = req.file.path
+
+  try {
+    const csvContent = fs.readFileSync(filePath, 'utf8')
+    const rows = parseCrewUploadCsv(csvContent)
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: 'File CSV kosong atau tidak valid' })
+    }
+
+    const insertUser = db.prepare(`
+      INSERT INTO users (name, ktp, phone, role, password, status, created_at)
+      VALUES (?, ?, ?, 'CREW', NULL, 'ACTIVE', ?)
+    `)
+
+    const createdIds = []
+    const errors = []
+
+    for (const row of rows) {
+      const parsed = userSchema.safeParse({
+        name: row.name,
+        ktp: row.ktp,
+        phone: row.phone,
+        role: 'CREW',
+        password: null,
+      })
+
+      if (!parsed.success) {
+        errors.push({ line: row.line, message: 'Format data tidak valid (butuh kolom: name, ktp, phone)' })
+        continue
+      }
+
+      try {
+        const result = insertUser.run(row.name, row.ktp, row.phone, getNowIso())
+        createdIds.push(Number(result.lastInsertRowid))
+      } catch (error) {
+        errors.push({ line: row.line, message: error.message })
+      }
+    }
+
+    for (const userId of createdIds) {
+      createAuditLog(req.user.id, 'CREATE_USER', 'user', userId, { role: 'CREW', source: 'UPLOAD_CSV' })
+    }
+
+    if (createdIds.length === 0) {
+      return res.status(400).json({
+        message: 'Tidak ada user yang berhasil diupload',
+        createdCount: 0,
+        failedCount: errors.length,
+        errors,
+      })
+    }
+
+    res.status(201).json({
+      message: `${createdIds.length} crew berhasil diupload`,
+      createdCount: createdIds.length,
+      failedCount: errors.length,
+      errors,
+    })
+  } finally {
+    fs.rmSync(filePath, { force: true })
   }
 })
 

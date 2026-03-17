@@ -76,6 +76,8 @@ function App() {
   const [qrResult, setQrResult] = useState(null)
   const [activeDailyQrs, setActiveDailyQrs] = useState([])
   const [userForm, setUserForm] = useState({ name: '', ktp: '', phone: '', role: 'CREW', password: '' })
+  const [crewUploadFile, setCrewUploadFile] = useState(null)
+  const [crewUploadLoading, setCrewUploadLoading] = useState(false)
   const [projectForm, setProjectForm] = useState({ code: '', name: '', picUserId: '' })
   const [assignmentForm, setAssignmentForm] = useState({ projectId: '', userId: '', assignmentRole: 'CREW' })
   const [editingAssignmentId, setEditingAssignmentId] = useState(null)
@@ -403,6 +405,44 @@ function App() {
       showToast('User berhasil ditambahkan', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menambah user'))
+    }
+  }
+
+  async function uploadCrewUsers(event) {
+    event.preventDefault()
+    if (!crewUploadFile) {
+      setNotice('Pilih file CSV terlebih dahulu')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', crewUploadFile)
+
+    setCrewUploadLoading(true)
+    try {
+      const { data } = await http.post('/admin/users/upload-crew', formData, {
+        headers: {
+          ...authHeader(),
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      await loadAdminBootstrap()
+      setCrewUploadFile(null)
+      const message = data.failedCount > 0
+        ? `${data.createdCount} crew berhasil, ${data.failedCount} gagal.`
+        : `${data.createdCount} crew berhasil diupload.`
+      setNotice(message)
+      showToast(message, 'success')
+    } catch (error) {
+      const apiMessage = error?.response?.data?.message
+      const failedCount = error?.response?.data?.failedCount
+      const message = failedCount
+        ? `${apiMessage} (${failedCount} baris gagal)`
+        : getErrorMessage(error, 'Gagal upload crew')
+      setNotice(message)
+    } finally {
+      setCrewUploadLoading(false)
     }
   }
 
@@ -1025,6 +1065,19 @@ function App() {
                       </>
                     )}
                     <button type="submit">Simpan user</button>
+
+                    <hr />
+                    <p className="section-label">Upload massal crew</p>
+                    <label>File CSV (name, ktp, phone)</label>
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(event) => setCrewUploadFile(event.target.files?.[0] || null)}
+                    />
+                    <p className="hint">Khusus untuk role CREW. Password otomatis kosong.</p>
+                    <button type="button" onClick={uploadCrewUsers} disabled={crewUploadLoading}>
+                      {crewUploadLoading ? 'Mengupload...' : 'Upload crew'}
+                    </button>
                   </form>
 
                   <div className="card">
