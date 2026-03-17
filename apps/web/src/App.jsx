@@ -44,7 +44,7 @@ const http = axios.create({
 })
 
 const USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
-const ASSIGNMENT_ROLES = ['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
+const ASSIGNMENT_ROLE_SET = new Set(['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 const NO_PASSWORD_ROLES = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 
 function App() {
@@ -83,7 +83,7 @@ function App() {
   const [crewUploadFile, setCrewUploadFile] = useState(null)
   const [crewUploadLoading, setCrewUploadLoading] = useState(false)
   const [projectForm, setProjectForm] = useState({ code: '', name: '', picUserId: '' })
-  const [assignmentForm, setAssignmentForm] = useState({ projectId: '', userId: '', assignmentRole: 'CREW' })
+  const [assignmentForm, setAssignmentForm] = useState({ projectId: '', userId: '' })
   const [editingAssignmentId, setEditingAssignmentId] = useState(null)
   const [editingAssignmentProjectId, setEditingAssignmentProjectId] = useState('')
   const [editingProjectId, setEditingProjectId] = useState(null)
@@ -518,10 +518,22 @@ function App() {
 
   async function assignProject(event) {
     event.preventDefault()
+
+    const selectedUser = nonAdminUsers.find((user) => user.id === Number(assignmentForm.userId))
+    if (!selectedUser) {
+      setNotice('Pilih user yang valid untuk assignment.')
+      return
+    }
+
+    if (!ASSIGNMENT_ROLE_SET.has(selectedUser.role)) {
+      setNotice(`Role user ${selectedUser.role} tidak bisa di-assign ke project.`)
+      return
+    }
+
     try {
       await http.post(`/admin/projects/${assignmentForm.projectId}/assignments`, {
         userId: Number(assignmentForm.userId),
-        assignmentRole: assignmentForm.assignmentRole,
+        assignmentRole: selectedUser.role,
       }, { headers: authHeader() })
       await loadAdminBootstrap()
       if (assignmentForm.projectId) {
@@ -1404,12 +1416,7 @@ function App() {
                         <option key={user.id} value={user.id}>{user.name} · {user.role}</option>
                       ))}
                     </select>
-                    <label>Role assignment</label>
-                    <select value={assignmentForm.assignmentRole} onChange={(event) => setAssignmentForm((current) => ({ ...current, assignmentRole: event.target.value }))}>
-                      {ASSIGNMENT_ROLES.map((role) => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
+                    <p className="hint">Role assignment otomatis mengikuti role user yang dipilih.</p>
                     <button type="submit">Simpan assignment</button>
                   </form>
 
