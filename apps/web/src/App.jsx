@@ -59,6 +59,8 @@ function App() {
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
   const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
   const [changePasswordLoading, setChangePasswordLoading] = useState(false)
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [editingUserName, setEditingUserName] = useState('')
 
   const filteredCrew = useMemo(() => {
     const query = crewSearch.trim().toLowerCase()
@@ -599,6 +601,63 @@ function App() {
     }
   }
 
+  function startEditUser(user) {
+    setEditingUserId(user.id)
+    setEditingUserName(user.name)
+  }
+
+  function cancelEditUser() {
+    setEditingUserId(null)
+    setEditingUserName('')
+  }
+
+  async function saveEditUser(userId) {
+    if (!editingUserName.trim() || editingUserName.trim().length < 2) {
+      setNotice('Nama minimal 2 karakter')
+      return
+    }
+
+    try {
+      await http.patch(`/admin/users/${userId}`, { name: editingUserName.trim() }, { headers: authHeader() })
+      await loadAdminBootstrap()
+      cancelEditUser()
+      showToast('Nama user berhasil diubah', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal mengubah nama user'))
+    }
+  }
+
+  async function toggleUserStatus(user) {
+    const nextStatus = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+    const confirmed = window.confirm(`Ubah status "${user.name}" menjadi ${nextStatus}?`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await http.patch(`/admin/users/${user.id}/status`, {}, { headers: authHeader() })
+      await loadAdminBootstrap()
+      showToast(`Status user diubah ke ${nextStatus}`, 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal mengubah status user'))
+    }
+  }
+
+  async function deleteUser(user) {
+    const confirmed = window.confirm(`Hapus user "${user.name}"? Tindakan ini tidak bisa dibatalkan.`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await http.delete(`/admin/users/${user.id}`, { headers: authHeader() })
+      await loadAdminBootstrap()
+      showToast('User berhasil dihapus', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal menghapus user'))
+    }
+  }
+
   async function handleChangePassword(event) {
     event.preventDefault()
     
@@ -958,6 +1017,7 @@ function App() {
                       <select value={userListFilters.status} onChange={(event) => setUserListFilters((current) => ({ ...current, status: event.target.value }))}>
                         <option value="">Semua status</option>
                         <option value="ACTIVE">ACTIVE</option>
+                        <option value="INACTIVE">INACTIVE</option>
                       </select>
                       <select value={userListFilters.project} onChange={(event) => setUserListFilters((current) => ({ ...current, project: event.target.value }))}>
                         <option value="">Semua project</option>
@@ -977,17 +1037,51 @@ function App() {
                             <th>Role</th>
                             <th>Status</th>
                             <th>Project</th>
+                            <th>Aksi</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredAdminUsers.map((user) => (
                             <tr key={user.id}>
-                              <td>{user.name}</td>
+                              <td>
+                                {editingUserId === user.id ? (
+                                  <input
+                                    value={editingUserName}
+                                    onChange={(event) => setEditingUserName(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') saveEditUser(user.id)
+                                      if (event.key === 'Escape') cancelEditUser()
+                                    }}
+                                    autoFocus
+                                    style={{ minWidth: 120, marginBottom: 0 }}
+                                  />
+                                ) : user.name}
+                              </td>
                               <td>{user.ktp || '-'}</td>
                               <td>{user.phone}</td>
                               <td>{user.role}</td>
-                              <td>{user.status}</td>
+                              <td>
+                                <span className={`status-badge ${user.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}`}>
+                                  {user.status}
+                                </span>
+                              </td>
                               <td>{user.projectNames.length ? user.projectNames.join(', ') : '-'}</td>
+                              <td>
+                                {editingUserId === user.id ? (
+                                  <div className="action-row">
+                                    <button type="button" onClick={() => saveEditUser(user.id)}>Simpan</button>
+                                    <button type="button" className="secondary-action" onClick={cancelEditUser}>Batal</button>
+                                  </div>
+                                ) : (
+                                  <div className="action-row">
+                                    <button type="button" className="secondary-action" onClick={() => startEditUser(user)}>Edit</button>
+                                    <button type="button" className="secondary-action" onClick={() => toggleUserStatus(user)}>
+                                      {user.status === 'ACTIVE' ? 'Non-aktif' : 'Aktifkan'}
+                                    </button>
+                                    <button type="button" className="secondary-action" onClick={() => deleteUser(user)}>Hapus</button>
+                                  </div>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

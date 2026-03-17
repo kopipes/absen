@@ -418,6 +418,73 @@ app.post('/api/admin/users', requireRoles('ADMIN'), (req, res) => {
   }
 })
 
+app.patch('/api/admin/users/:id', requireRoles('ADMIN'), (req, res) => {
+  const userId = Number(req.params.id)
+  if (Number.isNaN(userId)) {
+    return res.status(400).json({ message: 'ID user tidak valid' })
+  }
+
+  const nameSchema = z.object({ name: z.string().min(2) })
+  const parsed = nameSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Nama minimal 2 karakter' })
+  }
+
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
+  if (!user) {
+    return res.status(404).json({ message: 'User tidak ditemukan' })
+  }
+
+  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(parsed.data.name, userId)
+  createAuditLog(req.user.id, 'UPDATE_USER', 'user', userId, { name: parsed.data.name })
+  res.json({ message: 'User berhasil diperbarui' })
+})
+
+app.patch('/api/admin/users/:id/status', requireRoles('ADMIN'), (req, res) => {
+  const userId = Number(req.params.id)
+  if (Number.isNaN(userId)) {
+    return res.status(400).json({ message: 'ID user tidak valid' })
+  }
+
+  if (userId === req.user.id) {
+    return res.status(400).json({ message: 'Tidak bisa mengubah status akun sendiri' })
+  }
+
+  const user = db.prepare('SELECT id, status FROM users WHERE id = ?').get(userId)
+  if (!user) {
+    return res.status(404).json({ message: 'User tidak ditemukan' })
+  }
+
+  const newStatus = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+  db.prepare('UPDATE users SET status = ? WHERE id = ?').run(newStatus, userId)
+  createAuditLog(req.user.id, 'UPDATE_USER_STATUS', 'user', userId, { status: newStatus })
+  res.json({ message: `Status user diubah ke ${newStatus}`, status: newStatus })
+})
+
+app.delete('/api/admin/users/:id', requireRoles('ADMIN'), (req, res) => {
+  const userId = Number(req.params.id)
+  if (Number.isNaN(userId)) {
+    return res.status(400).json({ message: 'ID user tidak valid' })
+  }
+
+  if (userId === req.user.id) {
+    return res.status(400).json({ message: 'Tidak bisa menghapus akun sendiri' })
+  }
+
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
+  if (!user) {
+    return res.status(404).json({ message: 'User tidak ditemukan' })
+  }
+
+  try {
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+    createAuditLog(req.user.id, 'DELETE_USER', 'user', userId, {})
+    res.json({ message: 'User berhasil dihapus' })
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menghapus user' })
+  }
+})
+
 app.post('/api/auth/change-password', authenticate, (req, res) => {
   const parsed = changePasswordSchema.safeParse(req.body)
   if (!parsed.success) {

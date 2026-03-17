@@ -315,6 +315,17 @@ button[type='submit']:hover,
   flex-wrap: wrap;
 }
 
+td .action-row {
+  flex-wrap: nowrap;
+}
+
+td .action-row button {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .panel-header {
   justify-content: space-between;
   align-items: flex-start;
@@ -328,6 +339,25 @@ button[type='submit']:hover,
   background: rgba(255, 159, 67, 0.12);
   color: #8c4a03;
   font-weight: 700;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.status-active {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.status-inactive {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
 }
 
 .tab-row {
