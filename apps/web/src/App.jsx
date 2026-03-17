@@ -56,6 +56,9 @@ function App() {
     endDate: dayjs().format('YYYY-MM-DD'),
   })
   const [userListFilters, setUserListFilters] = useState({ search: '', role: '', status: '', project: '' })
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+  const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false)
 
   const filteredCrew = useMemo(() => {
     const query = crewSearch.trim().toLowerCase()
@@ -596,6 +599,42 @@ function App() {
     }
   }
 
+  async function handleChangePassword(event) {
+    event.preventDefault()
+    
+    if (!changePasswordForm.oldPassword || !changePasswordForm.newPassword || !changePasswordForm.confirmPassword) {
+      setNotice('Semua field harus diisi')
+      return
+    }
+
+    if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
+      setNotice('Password baru dan konfirmasi tidak sama')
+      return
+    }
+
+    if (changePasswordForm.newPassword.length < 3) {
+      setNotice('Password minimal 3 karakter')
+      return
+    }
+
+    setChangePasswordLoading(true)
+    try {
+      await http.post('/auth/change-password', {
+        oldPassword: changePasswordForm.oldPassword,
+        newPassword: changePasswordForm.newPassword,
+      }, { headers: authHeader() })
+      
+      setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+      setShowChangePasswordModal(false)
+      setNotice('Password berhasil diubah')
+      showToast('Password berhasil diubah', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal mengubah password'))
+    } finally {
+      setChangePasswordLoading(false)
+    }
+  }
+
   function startEditProjectAssignment(assignment) {
     setEditingAssignmentId(assignment.id)
     setEditingAssignmentProjectId(String(assignment.project_id))
@@ -708,9 +747,14 @@ function App() {
             Admin / PIC
           </button>
           {authState.user && (
-            <button onClick={logoutAdmin} type="button">
-              Logout
-            </button>
+            <>
+              <button onClick={() => setShowChangePasswordModal(true)} type="button">
+                Ubah Password
+              </button>
+              <button onClick={logoutAdmin} type="button">
+                Logout
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -1607,6 +1651,67 @@ function App() {
             </div>
           )}
         </section>
+      )}
+
+      {showChangePasswordModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Ubah Password</h2>
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setShowChangePasswordModal(false)
+                  setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+                }}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <form className="modal-body" onSubmit={handleChangePassword}>
+              <label>Password Lama</label>
+              <input
+                type="password"
+                value={changePasswordForm.oldPassword}
+                onChange={(event) => setChangePasswordForm((current) => ({ ...current, oldPassword: event.target.value }))}
+                placeholder="Masukkan password lama"
+              />
+
+              <label>Password Baru</label>
+              <input
+                type="password"
+                value={changePasswordForm.newPassword}
+                onChange={(event) => setChangePasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
+                placeholder="Masukkan password baru"
+              />
+
+              <label>Konfirmasi Password Baru</label>
+              <input
+                type="password"
+                value={changePasswordForm.confirmPassword}
+                onChange={(event) => setChangePasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                placeholder="Konfirmasi password baru"
+              />
+
+              <div className="modal-actions">
+                <button type="submit" disabled={changePasswordLoading}>
+                  {changePasswordLoading ? 'Menyimpan...' : 'Simpan'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={() => {
+                    setShowChangePasswordModal(false)
+                    setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+                  }}
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   )

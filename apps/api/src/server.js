@@ -49,6 +49,11 @@ const userSchema = z.object({
   password: z.string().min(3).nullable().optional(),
 })
 
+const changePasswordSchema = z.object({
+  oldPassword: z.string().min(3),
+  newPassword: z.string().min(3),
+})
+
 const assignmentSchema = z.object({
   userId: z.number().int(),
   assignmentRole: z.enum(['PIC', 'CREW']),
@@ -410,6 +415,27 @@ app.post('/api/admin/users', requireRoles('ADMIN'), (req, res) => {
     res.status(201).json({ id: result.lastInsertRowid })
   } catch (error) {
     res.status(409).json({ message: error.message })
+  }
+})
+
+app.post('/api/auth/change-password', authenticate, (req, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Payload tidak valid' })
+  }
+
+  const user = db.prepare('SELECT id, password FROM users WHERE id = ?').get(req.user.id)
+  
+  if (!user || user.password !== parsed.data.oldPassword) {
+    return res.status(401).json({ message: 'Password lama tidak sesuai' })
+  }
+
+  try {
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(parsed.data.newPassword, req.user.id)
+    createAuditLog(req.user.id, 'CHANGE_PASSWORD', 'user', req.user.id, { oldPassword: '***', newPassword: '***' })
+    res.json({ message: 'Password berhasil diubah' })
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal mengubah password' })
   }
 })
 
