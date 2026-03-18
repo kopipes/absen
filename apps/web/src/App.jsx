@@ -73,6 +73,7 @@ function App() {
   const [projectAssignments, setProjectAssignments] = useState([])
   const [overtimeAssignments, setOvertimeAssignments] = useState([])
   const [reportData, setReportData] = useState({ attendance: [], overtimeAssignments: [] })
+  const [reportCrewSort, setReportCrewSort] = useState('CREW_ASC')
   const [summaryRows, setSummaryRows] = useState([])
   const [loadingAdmin, setLoadingAdmin] = useState(false)
   const [loadingAssignments, setLoadingAssignments] = useState(false)
@@ -130,6 +131,30 @@ function App() {
       return matchesSearch && matchesRole && matchesStatus && matchesProject
     })
   }, [adminData.users, userListFilters])
+
+  const sortedReportAttendance = useMemo(() => {
+    const rows = [...reportData.attendance]
+    rows.sort((a, b) => {
+      const crewCompare = String(a.crew_name || '').localeCompare(String(b.crew_name || ''), 'id', { sensitivity: 'base' })
+      if (crewCompare !== 0) {
+        return reportCrewSort === 'CREW_DESC' ? -crewCompare : crewCompare
+      }
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    })
+    return rows
+  }, [reportData.attendance, reportCrewSort])
+
+  const sortedReportOvertimeAssignments = useMemo(() => {
+    const rows = [...reportData.overtimeAssignments]
+    rows.sort((a, b) => {
+      const crewCompare = String(a.crew_name || '').localeCompare(String(b.crew_name || ''), 'id', { sensitivity: 'base' })
+      if (crewCompare !== 0) {
+        return reportCrewSort === 'CREW_DESC' ? -crewCompare : crewCompare
+      }
+      return String(a.assignment_date || '').localeCompare(String(b.assignment_date || ''))
+    })
+    return rows
+  }, [reportData.overtimeAssignments, reportCrewSort])
 
   useEffect(() => {
     if (!tokenFromUrl) {
@@ -626,6 +651,29 @@ function App() {
       setNotice('Report berhasil dimuat ulang.')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal memuat report'))
+    }
+  }
+
+  async function updateAttendanceReview(row, approved) {
+    const actionLabel = approved ? 'approve' : 'tolak'
+    const confirmed = window.confirm(`${actionLabel === 'approve' ? 'Approve' : 'Tolak'} review untuk ${row.crew_name} (${row.flow_type} - ${row.event_type})?`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await http.patch(`/admin/attendance/${row.id}/review`, {
+        approved,
+      }, { headers: authHeader() })
+
+      await loadReports({
+        projectId: reportForm.projectId || undefined,
+        date: reportForm.date,
+      })
+
+      showToast(`Review attendance berhasil di-${approved ? 'approve' : 'tolak'}`, 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal memperbarui review attendance'))
     }
   }
 
@@ -1252,6 +1300,10 @@ function App() {
                       ))}
                     </select>
                     <input type="date" value={reportForm.date} onChange={(event) => setReportForm((current) => ({ ...current, date: event.target.value }))} />
+                    <select value={reportCrewSort} onChange={(event) => setReportCrewSort(event.target.value)}>
+                      <option value="CREW_ASC">Crew A-Z</option>
+                      <option value="CREW_DESC">Crew Z-A</option>
+                    </select>
                     <button type="submit">Muat report</button>
                   </form>
 
@@ -1268,10 +1320,11 @@ function App() {
                               <th>Flow</th>
                               <th>Event</th>
                               <th>Status</th>
+                              <th>Review</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {reportData.attendance.map((row) => (
+                            {sortedReportAttendance.map((row) => (
                               <tr key={row.id}>
                                 <td>{formatDateTime(row.created_at)}</td>
                                 <td>{row.project_code}</td>
@@ -1279,6 +1332,20 @@ function App() {
                                 <td>{row.flow_type}</td>
                                 <td>{row.event_type}</td>
                                 <td>{row.status}</td>
+                                <td>
+                                  <div className="action-row">
+                                    {row.status !== 'OK' && (
+                                      <button type="button" className="secondary-action" onClick={() => updateAttendanceReview(row, true)}>
+                                        Approve
+                                      </button>
+                                    )}
+                                    {row.status !== 'REJECTED' && (
+                                      <button type="button" className="secondary-action" onClick={() => updateAttendanceReview(row, false)}>
+                                        Tolak
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1300,7 +1367,7 @@ function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {reportData.overtimeAssignments.map((row) => (
+                            {sortedReportOvertimeAssignments.map((row) => (
                               <tr key={row.id}>
                                 <td>{row.assignment_date}</td>
                                 <td>{row.project_name}</td>

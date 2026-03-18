@@ -91,6 +91,10 @@ const overtimeUpdateSchema = z.object({
   status: z.enum(['ASSIGNED', 'CANCELLED']).optional(),
 })
 
+const attendanceReviewSchema = z.object({
+  approved: z.boolean(),
+})
+
 function serializeProject(project) {
   return {
     ...project,
@@ -1140,6 +1144,38 @@ app.get('/api/admin/reports', requireRoles('ADMIN'), (req, res) => {
   `).all(...[date, ...(projectId ? [projectId] : []), ...(req.user.role === 'PIC' && !projectId ? [req.user.id] : [])])
 
   res.json({ attendance, overtimeAssignments })
+})
+
+app.patch('/api/admin/attendance/:id/review', requireRoles('ADMIN'), (req, res) => {
+  const attendanceId = Number(req.params.id)
+  const parsed = attendanceReviewSchema.safeParse(req.body)
+
+  if (Number.isNaN(attendanceId) || !parsed.success) {
+    return res.status(400).json({ message: 'Payload review attendance tidak valid' })
+  }
+
+  const existing = db.prepare(`
+    SELECT id, status
+    FROM attendance_records
+    WHERE id = ?
+  `).get(attendanceId)
+
+  if (!existing) {
+    return res.status(404).json({ message: 'Data attendance tidak ditemukan' })
+  }
+
+  const nextStatus = parsed.data.approved ? 'OK' : 'REJECTED'
+  if (existing.status === nextStatus) {
+    return res.json({ message: 'Status review tidak berubah', status: nextStatus })
+  }
+
+  db.prepare('UPDATE attendance_records SET status = ? WHERE id = ?').run(nextStatus, attendanceId)
+  createAuditLog(req.user.id, 'REVIEW_ATTENDANCE', 'attendance_record', attendanceId, {
+    fromStatus: existing.status,
+    toStatus: nextStatus,
+  })
+
+  res.json({ message: `Review attendance diubah ke ${nextStatus}`, status: nextStatus })
 })
 
 app.get('/api/admin/reports/summary', requireRoles('ADMIN'), (req, res) => {

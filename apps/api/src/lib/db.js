@@ -15,6 +15,7 @@ const now = () => new Date().toISOString()
 const today = () => dayjs().format('YYYY-MM-DD')
 const SUPPORTED_USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
 const SUPPORTED_ASSIGNMENT_ROLES = ['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
+const SUPPORTED_ATTENDANCE_STATUSES = ['OK', 'NEEDS_REVIEW', 'REJECTED']
 
 export function initializeDatabase() {
   db.exec(`
@@ -85,7 +86,7 @@ export function initializeDatabase() {
       photo_path TEXT,
       latitude REAL,
       longitude REAL,
-      status TEXT NOT NULL DEFAULT 'OK' CHECK (status IN ('OK', 'NEEDS_REVIEW')),
+      status TEXT NOT NULL DEFAULT 'OK' CHECK (status IN ('OK', 'NEEDS_REVIEW', 'REJECTED')),
       source_token TEXT NOT NULL,
       assignment_id INTEGER,
       created_at TEXT NOT NULL,
@@ -114,6 +115,7 @@ export function initializeDatabase() {
   repairLegacyUserForeignKeys()
   ensureUserRoleConstraint()
   ensureProjectAssignmentRoleConstraint()
+  ensureAttendanceStatusConstraint()
   ensureUserColumns()
 
   seedDatabase()
@@ -204,6 +206,65 @@ function ensureProjectAssignmentRoleConstraint() {
 
     db.exec('DROP TABLE project_assignments')
     db.exec('ALTER TABLE project_assignments_new RENAME TO project_assignments')
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON')
+  }
+}
+
+function ensureAttendanceStatusConstraint() {
+  const tableInfo = db.prepare(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'attendance_records'
+  `).get()
+
+  const tableSql = tableInfo?.sql || ''
+  const hasAllStatuses = SUPPORTED_ATTENDANCE_STATUSES.every((status) => tableSql.includes(`'${status}'`))
+  if (hasAllStatuses) {
+    return
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF')
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    db.exec(`
+      CREATE TABLE attendance_records_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        flow_type TEXT NOT NULL CHECK (flow_type IN ('ATTENDANCE', 'OVERTIME')),
+        event_type TEXT NOT NULL CHECK (event_type IN ('CHECK_IN', 'CHECK_OUT')),
+        photo_path TEXT,
+        latitude REAL,
+        longitude REAL,
+        status TEXT NOT NULL DEFAULT 'OK' CHECK (status IN ('OK', 'NEEDS_REVIEW', 'REJECTED')),
+        source_token TEXT NOT NULL,
+        assignment_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (assignment_id) REFERENCES overtime_assignments(id) ON DELETE SET NULL
+      )
+    `)
+
+    db.exec(`
+      INSERT INTO attendance_records_new (
+        id, project_id, user_id, flow_type, event_type, photo_path,
+        latitude, longitude, status, source_token, assignment_id, created_at
+      )
+      SELECT
+        id, project_id, user_id, flow_type, event_type, photo_path,
+        latitude, longitude, status, source_token, assignment_id, created_at
+      FROM attendance_records
+    `)
+
+    db.exec('DROP TABLE attendance_records')
+    db.exec('ALTER TABLE attendance_records_new RENAME TO attendance_records')
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')
