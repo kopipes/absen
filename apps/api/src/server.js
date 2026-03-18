@@ -21,9 +21,71 @@ const app = express()
 const upload = multer({ dest: uploadsDir, limits: { fileSize: 5 * 1024 * 1024 } })
 const port = Number(process.env.PORT || 4000)
 
+function detectImageMime(fileBuffer) {
+  if (!fileBuffer || fileBuffer.length < 12) {
+    return 'application/octet-stream'
+  }
+
+  if (fileBuffer[0] === 0xFF && fileBuffer[1] === 0xD8 && fileBuffer[2] === 0xFF) {
+    return 'image/jpeg'
+  }
+
+  if (
+    fileBuffer[0] === 0x89
+    && fileBuffer[1] === 0x50
+    && fileBuffer[2] === 0x4E
+    && fileBuffer[3] === 0x47
+  ) {
+    return 'image/png'
+  }
+
+  if (
+    fileBuffer[0] === 0x47
+    && fileBuffer[1] === 0x49
+    && fileBuffer[2] === 0x46
+    && fileBuffer[3] === 0x38
+  ) {
+    return 'image/gif'
+  }
+
+  if (
+    fileBuffer[0] === 0x52
+    && fileBuffer[1] === 0x49
+    && fileBuffer[2] === 0x46
+    && fileBuffer[3] === 0x46
+    && fileBuffer[8] === 0x57
+    && fileBuffer[9] === 0x45
+    && fileBuffer[10] === 0x42
+    && fileBuffer[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+
+  return 'application/octet-stream'
+}
+
 app.use(cors())
 app.use(express.json())
-app.use('/uploads', express.static(uploadsDir))
+
+app.get('/api/uploads/:filename', (req, res) => {
+  const safeFileName = path.basename(String(req.params.filename || ''))
+  if (!safeFileName) {
+    return res.status(400).json({ message: 'Nama file tidak valid' })
+  }
+
+  const targetPath = path.join(uploadsDir, safeFileName)
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).json({ message: 'File foto tidak ditemukan' })
+  }
+
+  try {
+    const headerBytes = fs.readFileSync(targetPath, { encoding: null, flag: 'r' }).subarray(0, 16)
+    res.setHeader('Content-Type', detectImageMime(headerBytes))
+    res.sendFile(targetPath)
+  } catch {
+    res.status(500).json({ message: 'Gagal membuka file foto' })
+  }
+})
 
 const loginSchema = z.object({
   phone: z.string().min(8),
@@ -375,7 +437,7 @@ app.post('/api/public/attendance', upload.single('photo'), (req, res) => {
   }
 
   const status = parsed.data.latitude == null || parsed.data.longitude == null ? 'NEEDS_REVIEW' : 'OK'
-  const photoPath = req.file ? `/uploads/${req.file.filename}` : null
+  const photoPath = req.file ? `/api/uploads/${req.file.filename}` : null
   const createdAt = getNowIso()
 
   const result = db.prepare(`

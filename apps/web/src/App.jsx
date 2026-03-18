@@ -39,6 +39,29 @@ function getDefaultApiBase() {
 
 const API_BASE = import.meta.env.VITE_API_URL || getDefaultApiBase()
 
+function resolveUploadedPhotoUrl(photoPath) {
+  if (!photoPath) {
+    return ''
+  }
+
+  if (/^https?:\/\//i.test(photoPath)) {
+    return photoPath
+  }
+
+  const normalizedPath = photoPath.startsWith('/') ? photoPath : `/${photoPath}`
+  const apiOrigin = API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE
+
+  if (normalizedPath.startsWith('/api/')) {
+    return `${apiOrigin}${normalizedPath}`
+  }
+
+  if (normalizedPath.startsWith('/uploads/')) {
+    return `${API_BASE}${normalizedPath}`
+  }
+
+  return `${apiOrigin}${normalizedPath}`
+}
+
 const http = axios.create({
   baseURL: API_BASE,
 })
@@ -103,6 +126,7 @@ function App() {
   const [changePasswordLoading, setChangePasswordLoading] = useState(false)
   const [editingUserId, setEditingUserId] = useState(null)
   const [editingUserName, setEditingUserName] = useState('')
+  const [photoPreview, setPhotoPreview] = useState({ open: false, url: '', crewName: '' })
 
   const filteredCrew = useMemo(() => {
     const query = crewSearch.trim().toLowerCase()
@@ -675,6 +699,20 @@ function App() {
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal memperbarui review attendance'))
     }
+  }
+
+  function openPhotoPreview(row) {
+    const url = resolveUploadedPhotoUrl(row.photo_path)
+    if (!url) {
+      setNotice('Foto tidak tersedia')
+      return
+    }
+
+    setPhotoPreview({
+      open: true,
+      url,
+      crewName: row.crew_name || 'Crew',
+    })
   }
 
   async function refreshSummary(event) {
@@ -1320,6 +1358,7 @@ function App() {
                               <th>Flow</th>
                               <th>Event</th>
                               <th>Status</th>
+                              <th>Foto</th>
                               <th>Review</th>
                             </tr>
                           </thead>
@@ -1332,6 +1371,15 @@ function App() {
                                 <td>{row.flow_type}</td>
                                 <td>{row.event_type}</td>
                                 <td>{row.status}</td>
+                                <td>
+                                  {row.photo_path ? (
+                                    <button type="button" className="secondary-action" onClick={() => openPhotoPreview(row)}>
+                                      Lihat foto
+                                    </button>
+                                  ) : (
+                                    '-'
+                                  )}
+                                </td>
                                 <td>
                                   <div className="action-row">
                                     {row.status !== 'OK' && (
@@ -2003,6 +2051,33 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {photoPreview.open && (
+        <div className="modal-overlay" onClick={() => setPhotoPreview({ open: false, url: '', crewName: '' })}>
+          <div className="modal photo-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Foto {photoPreview.crewName}</h2>
+              <button
+                className="modal-close"
+                onClick={() => setPhotoPreview({ open: false, url: '', crewName: '' })}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body photo-preview-body">
+              <img
+                src={photoPreview.url}
+                alt={`Foto ${photoPreview.crewName}`}
+                className="photo-preview-image"
+              />
+              <a href={photoPreview.url} target="_blank" rel="noreferrer">
+                Buka di tab baru
+              </a>
+            </div>
           </div>
         </div>
       )}
