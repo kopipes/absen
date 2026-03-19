@@ -21,6 +21,8 @@ const app = express()
 const upload = multer({ dest: uploadsDir, limits: { fileSize: 5 * 1024 * 1024 } })
 const port = Number(process.env.PORT || 4000)
 
+app.set('trust proxy', true)
+
 function detectImageMime(fileBuffer) {
   if (!fileBuffer || fileBuffer.length < 12) {
     return 'application/octet-stream'
@@ -198,6 +200,18 @@ function getPublicWebUrl(req) {
   const configuredPublicUrl = process.env.PUBLIC_WEB_URL?.trim()
   if (configuredPublicUrl) {
     return configuredPublicUrl.replace(/\/+$/, '')
+  }
+
+  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const forwardedHost = req.get('x-forwarded-host')?.split(',')[0]?.trim()
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`.replace(/\/+$/, '')
+  }
+
+  const protocol = req.protocol?.trim()
+  const host = req.get('host')?.trim()
+  if (protocol && host) {
+    return `${protocol}://${host}`.replace(/\/+$/, '')
   }
 
   const requestOrigin = req.get('origin')?.trim()
@@ -1192,7 +1206,17 @@ app.get('/api/admin/reports', requireRoles('ADMIN'), (req, res) => {
 
   const overtimeAssignments = db.prepare(`
     SELECT oa.id, oa.assignment_date, oa.status, u.name AS crew_name, p.name AS project_name,
-      assigner.name AS assigned_by_name
+      assigner.name AS assigned_by_name,
+      CASE WHEN EXISTS (
+        SELECT 1
+        FROM attendance_records ar
+        WHERE ar.project_id = oa.project_id
+          AND ar.user_id = oa.user_id
+          AND ar.flow_type = 'OVERTIME'
+          AND date(ar.created_at) = oa.assignment_date
+          AND ar.latitude IS NOT NULL
+          AND ar.longitude IS NOT NULL
+      ) THEN 1 ELSE 0 END AS has_geo_tag
     FROM overtime_assignments oa
     JOIN users u ON u.id = oa.user_id
     JOIN users assigner ON assigner.id = oa.assigned_by

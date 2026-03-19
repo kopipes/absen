@@ -633,6 +633,33 @@ function App() {
     }
   }
 
+  async function copyQrLink(qrValue) {
+    if (!qrValue) {
+      setNotice('Link QR tidak tersedia')
+      return
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(qrValue)
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = qrValue
+        textArea.setAttribute('readonly', '')
+        textArea.style.position = 'absolute'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+
+      showToast('Link QR berhasil disalin', 'success')
+    } catch {
+      setNotice('Gagal menyalin link QR')
+    }
+  }
+
   async function assignOvertime(event) {
     event.preventDefault()
     try {
@@ -1358,6 +1385,7 @@ function App() {
                               <th>Flow</th>
                               <th>Event</th>
                               <th>Status</th>
+                              <th>Geo Tag</th>
                               <th>Foto</th>
                               <th>Review</th>
                             </tr>
@@ -1371,6 +1399,15 @@ function App() {
                                 <td>{row.flow_type}</td>
                                 <td>{row.event_type}</td>
                                 <td>{row.status}</td>
+                                <td>
+                                  <input
+                                    type="checkbox"
+                                    checked={row.latitude != null && row.longitude != null}
+                                    readOnly
+                                    disabled
+                                    aria-label={`Geo tag ${row.crew_name}`}
+                                  />
+                                </td>
                                 <td>
                                   {row.photo_path ? (
                                     <button type="button" className="secondary-action" onClick={() => openPhotoPreview(row)}>
@@ -1412,6 +1449,7 @@ function App() {
                               <th>Crew</th>
                               <th>Assigned by</th>
                               <th>Status</th>
+                              <th>Geo Tag</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1422,6 +1460,15 @@ function App() {
                                 <td>{row.crew_name}</td>
                                 <td>{row.assigned_by_name}</td>
                                 <td>{row.status}</td>
+                                <td>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(row.has_geo_tag)}
+                                    readOnly
+                                    disabled
+                                    aria-label={`Geo tag lembur ${row.crew_name}`}
+                                  />
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1897,6 +1944,7 @@ function App() {
                             <th>Project</th>
                             <th>Berlaku sampai</th>
                             <th>Link QR</th>
+                            <th>Copy</th>
                             <th>Hapus</th>
                           </tr>
                         </thead>
@@ -1906,6 +1954,9 @@ function App() {
                               <td>{item.projectCode} · {item.projectName}</td>
                               <td>{formatDateTime(item.expiresAt)}</td>
                               <td className="break-all">{item.qrValue}</td>
+                              <td>
+                                <button className="secondary-action" type="button" onClick={() => copyQrLink(item.qrValue)}>Copy</button>
+                              </td>
                               <td>
                                 <button className="secondary-action" type="button" onClick={() => deleteActiveQr(item)}>Hapus</button>
                               </td>
