@@ -180,6 +180,26 @@ function App() {
     return rows
   }, [reportData.overtimeAssignments, reportCrewSort])
 
+  const incompleteCrewSteps = useMemo(() => {
+    const steps = []
+
+    if (!selectedCrewId) {
+      steps.push('Pilih nama crew')
+    }
+
+    if (!photoFile) {
+      steps.push('Upload foto selfie')
+    }
+
+    if (locationState.latitude == null || locationState.longitude == null) {
+      steps.push('Ambil geotag lokasi')
+    }
+
+    return steps
+  }, [selectedCrewId, photoFile, locationState.latitude, locationState.longitude])
+
+  const isCrewSubmissionComplete = incompleteCrewSteps.length === 0
+
   useEffect(() => {
     if (!tokenFromUrl) {
       return
@@ -254,15 +274,22 @@ function App() {
         })
       },
       () => {
-        setLocationState({ latitude: null, longitude: null, status: 'Lokasi gagal diambil. Data tetap bisa dikirim sebagai review.' })
+        setLocationState({ latitude: null, longitude: null, status: 'Lokasi gagal diambil. Ambil lokasi dulu sebelum submit.' })
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
 
   async function submitCrewEvent(eventType) {
-    if (!publicProject || !tokenFromUrl || !selectedCrewId) {
-      setCrewMessage('Pilih nama crew terlebih dahulu.')
+    if (!publicProject || !tokenFromUrl) {
+      setCrewMessage('QR tidak valid atau project tidak ditemukan.')
+      return
+    }
+
+    if (!isCrewSubmissionComplete) {
+      const message = `Step belum lengkap: ${incompleteCrewSteps.join(', ')}.`
+      setCrewMessage(message)
+      showToast(message, 'error')
       return
     }
 
@@ -1124,7 +1151,7 @@ function App() {
                 <div className="card">
                   <label>Selfie crew</label>
                   <input type="file" accept="image/*" capture="user" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} />
-                  <p className="hint">Gunakan kamera depan HP untuk selfie masuk atau pulang.</p>
+                  <p className="hint">Gunakan kamera depan HP untuk selfie masuk atau pulang. (Wajib)</p>
 
                   <label>Geolocation</label>
                   <button className="secondary-action" onClick={handleLocate} type="button">
@@ -1134,12 +1161,16 @@ function App() {
                     {locationState.status}
                     {locationState.latitude != null && ` (${locationState.latitude.toFixed(5)}, ${locationState.longitude.toFixed(5)})`}
                   </p>
+                  <p className="hint">Geotag wajib diambil sebelum submit.</p>
+                  {!isCrewSubmissionComplete && (
+                    <p className="hint">Lengkapi dulu: {incompleteCrewSteps.join(' · ')}</p>
+                  )}
 
                   <div className="action-row">
-                    <button disabled={crewSubmitting || !selectedCrewId} onClick={() => submitCrewEvent('CHECK_IN')} type="button">
+                    <button disabled={crewSubmitting} onClick={() => submitCrewEvent('CHECK_IN')} type="button">
                       {crewSubmitting ? 'Menyimpan...' : 'Masuk'}
                     </button>
-                    <button disabled={crewSubmitting || !selectedCrewId} onClick={() => submitCrewEvent('CHECK_OUT')} type="button">
+                    <button disabled={crewSubmitting} onClick={() => submitCrewEvent('CHECK_OUT')} type="button">
                       {crewSubmitting ? 'Menyimpan...' : 'Pulang'}
                     </button>
                   </div>

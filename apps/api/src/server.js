@@ -403,6 +403,14 @@ app.post('/api/public/attendance', upload.single('photo'), (req, res) => {
     return res.status(400).json({ message: 'Payload absensi tidak valid', errors: parsed.error.flatten() })
   }
 
+  if (!req.file) {
+    return res.status(400).json({ message: 'Foto selfie wajib diisi sebelum submit absensi' })
+  }
+
+  if (parsed.data.latitude == null || parsed.data.longitude == null) {
+    return res.status(400).json({ message: 'Geotag wajib diisi sebelum submit absensi' })
+  }
+
   const validation = validateQrToken(parsed.data.token, parsed.data.projectId)
   if (!validation.valid) {
     return res.status(403).json({ message: validation.reason })
