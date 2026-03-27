@@ -1357,13 +1357,11 @@ app.get('/api/admin/reports/summary/export', requireRoles('ADMIN'), (req, res) =
     WHERE ${filters.join(' AND ')}
     GROUP BY ar.project_id, ar.user_id, p.name, u.name, date(ar.created_at)
     ORDER BY p.name, u.name, tanggal
-  `).all(...params).map((row) => ({
-    ...row,
-    nama_crew: `${row.nama_crew} - ${row.tanggal}`,
-  }))
+  `).all(...params)
 
   const header = [
     'Nama Project',
+    'Tanggal',
     'Nama Crew',
     'Jam Masuk',
     'Jam Keluar',
@@ -1373,6 +1371,7 @@ app.get('/api/admin/reports/summary/export', requireRoles('ADMIN'), (req, res) =
 
   const valueMap = {
     'Nama Project': 'nama_project',
+    Tanggal: 'tanggal',
     'Nama Crew': 'nama_crew',
     'Jam Masuk': 'jam_masuk',
     'Jam Keluar': 'jam_keluar',

@@ -1559,6 +1559,7 @@ function App() {
                       <thead>
                         <tr>
                           <th>Nama Project</th>
+                          <th>Tanggal</th>
                           <th>Nama Crew</th>
                           <th>Jam Masuk</th>
                           <th>Jam Keluar</th>
@@ -1570,7 +1571,8 @@ function App() {
                         {summaryRows.map((row, index) => (
                           <tr key={`${row.project_name}-${row.crew_name}-${row.summary_date || index}`}>
                             <td>{row.project_name}</td>
-                            <td>{`${row.crew_name}${row.summary_date ? ` - ${formatDate(row.summary_date)}` : ''}`}</td>
+                            <td>{row.summary_date ? formatDate(row.summary_date) : '-'}</td>
+                            <td>{row.crew_name}</td>
                             <td>{formatTime(row.attendance_check_in)}</td>
                             <td>{formatTime(row.attendance_check_out)}</td>
                             <td>{formatTime(row.overtime_check_in)}</td>
