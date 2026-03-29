@@ -16,9 +16,16 @@ initializeDatabase()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const uploadsDir = path.resolve(__dirname, '../uploads')
+const dataDir = path.resolve(__dirname, '../data')
+const backupDir = path.resolve(__dirname, '../backups')
+
+fs.mkdirSync(uploadsDir, { recursive: true })
+fs.mkdirSync(dataDir, { recursive: true })
+fs.mkdirSync(backupDir, { recursive: true })
 
 const app = express()
 const upload = multer({ dest: uploadsDir, limits: { fileSize: 5 * 1024 * 1024 } })
+const restoreUpload = multer({ dest: backupDir, limits: { fileSize: 50 * 1024 * 1024 } })
 const port = Number(process.env.PORT || 4000)
 
 app.set('trust proxy', true)
@@ -119,6 +126,15 @@ const crewLikeRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG
 const uploadAllowedRoles = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 const crewAssignmentRoles = assignmentRoles.filter((role) => role !== 'PIC')
 const crewAssignmentRolesSql = crewAssignmentRoles.map((role) => `'${role}'`).join(', ')
+const backupTables = [
+  'users',
+  'projects',
+  'project_assignments',
+  'daily_qr_tokens',
+  'overtime_assignments',
+  'attendance_records',
+  'audit_logs',
+]
 
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(3),
@@ -634,10 +650,14 @@ app.patch('/api/admin/users/:id', requireRoles('ADMIN'), (req, res) => {
     return res.status(400).json({ message: 'ID user tidak valid' })
   }
 
-  const nameSchema = z.object({ name: z.string().min(2) })
-  const parsed = nameSchema.safeParse(req.body)
+  const updateUserSchema = z.object({
+    name: z.string().min(2),
+    ktp: z.string().min(8),
+    phone: z.string().min(8),
+  })
+  const parsed = updateUserSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ message: 'Nama minimal 2 karakter' })
+    return res.status(400).json({ message: 'Data user tidak valid (nama min 2, KTP min 8, no telp min 8)' })
   }
 
   const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
@@ -645,9 +665,18 @@ app.patch('/api/admin/users/:id', requireRoles('ADMIN'), (req, res) => {
     return res.status(404).json({ message: 'User tidak ditemukan' })
   }
 
-  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(parsed.data.name, userId)
-  createAuditLog(req.user.id, 'UPDATE_USER', 'user', userId, { name: parsed.data.name })
-  res.json({ message: 'User berhasil diperbarui' })
+  try {
+    db.prepare('UPDATE users SET name = ?, ktp = ?, phone = ? WHERE id = ?')
+      .run(parsed.data.name, parsed.data.ktp, parsed.data.phone, userId)
+    createAuditLog(req.user.id, 'UPDATE_USER', 'user', userId, {
+      name: parsed.data.name,
+      ktp: parsed.data.ktp,
+      phone: parsed.data.phone,
+    })
+    res.json({ message: 'User berhasil diperbarui' })
+  } catch (error) {
+    res.status(409).json({ message: error.message })
+  }
 })
 
 app.patch('/api/admin/users/:id/status', requireRoles('ADMIN'), (req, res) => {
@@ -1049,6 +1078,100 @@ app.delete('/api/admin/qr/daily/:qrId', requireRoles('ADMIN'), (req, res) => {
   })
 
   res.json({ message: 'QR harian berhasil dihapus' })
+})
+
+app.get('/api/admin/backup/export', requireRoles('ADMIN'), async (req, res) => {
+  const backupTimestamp = dayjs().format('YYYYMMDD-HHmmss')
+  const backupFilename = `crew-backup-${backupTimestamp}.db`
+  const backupPath = path.join(backupDir, backupFilename)
+
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)')
+    await db.backup(backupPath)
+
+    createAuditLog(req.user.id, 'EXPORT_BACKUP', 'system_backup', backupFilename, {
+      backupFilename,
+    })
+
+    res.download(backupPath, backupFilename)
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Gagal membuat backup database' })
+  }
+})
+
+app.post('/api/admin/backup/restore', requireRoles('ADMIN'), restoreUpload.single('backup'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'File backup wajib diunggah' })
+  }
+
+  const uploadedBackupPath = req.file.path
+  const normalizedBackupPath = uploadedBackupPath.replaceAll("'", "''")
+
+  try {
+    db.exec('PRAGMA foreign_keys = OFF')
+    db.exec(`ATTACH DATABASE '${normalizedBackupPath}' AS restore_db`)
+
+    const hasRequiredTable = db.prepare(`
+      SELECT name
+      FROM restore_db.sqlite_master
+      WHERE type = 'table' AND name = ?
+    `)
+
+    for (const tableName of backupTables) {
+      if (!hasRequiredTable.get(tableName)) {
+        throw new Error(`File backup tidak valid: tabel ${tableName} tidak ditemukan`)
+      }
+    }
+
+    db.exec('BEGIN IMMEDIATE')
+
+    for (const tableName of [...backupTables].reverse()) {
+      db.exec(`DELETE FROM ${tableName}`)
+    }
+
+    for (const tableName of backupTables) {
+      db.exec(`INSERT INTO main.${tableName} SELECT * FROM restore_db.${tableName}`)
+    }
+
+    const hasSqliteSequence = db.prepare(`
+      SELECT name
+      FROM restore_db.sqlite_master
+      WHERE type = 'table' AND name = 'sqlite_sequence'
+    `).get()
+
+    if (hasSqliteSequence) {
+      db.exec('DELETE FROM main.sqlite_sequence')
+      db.exec('INSERT INTO main.sqlite_sequence SELECT * FROM restore_db.sqlite_sequence')
+    }
+
+    db.exec('COMMIT')
+    db.exec('DETACH DATABASE restore_db')
+    db.exec('PRAGMA foreign_keys = ON')
+
+    createAuditLog(req.user.id, 'RESTORE_BACKUP', 'system_backup', req.file.originalname, {
+      sourceFile: req.file.originalname,
+      uploadedPath: req.file.filename,
+    })
+
+    res.json({ message: 'Restore backup berhasil. Silakan refresh dashboard admin.' })
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      // ignore rollback error when transaction is not active
+    }
+
+    try {
+      db.exec('DETACH DATABASE restore_db')
+    } catch {
+      // ignore detach error when restore database is not attached
+    }
+
+    db.exec('PRAGMA foreign_keys = ON')
+    res.status(400).json({ message: error.message || 'Gagal restore backup' })
+  } finally {
+    fs.rmSync(uploadedBackupPath, { force: true })
+  }
 })
 
 app.post('/api/pic/overtime-assignments', requireRoles('ADMIN', 'PIC'), (req, res) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import dayjs from 'dayjs'
 
@@ -106,6 +106,9 @@ function App() {
   const [userForm, setUserForm] = useState({ name: '', ktp: '', phone: '', role: 'CREW', password: '' })
   const [crewUploadFile, setCrewUploadFile] = useState(null)
   const [crewUploadLoading, setCrewUploadLoading] = useState(false)
+  const [backupRestoreFile, setBackupRestoreFile] = useState(null)
+  const [backupLoading, setBackupLoading] = useState(false)
+  const backupRestoreInputRef = useRef(null)
   const [projectForm, setProjectForm] = useState({ code: '', name: '', picUserId: '' })
   const [assignmentForm, setAssignmentForm] = useState({ projectId: '', userId: '' })
   const [editingAssignmentId, setEditingAssignmentId] = useState(null)
@@ -125,7 +128,7 @@ function App() {
   const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
   const [changePasswordLoading, setChangePasswordLoading] = useState(false)
   const [editingUserId, setEditingUserId] = useState(null)
-  const [editingUserName, setEditingUserName] = useState('')
+  const [editingUserForm, setEditingUserForm] = useState({ name: '', ktp: '', phone: '' })
   const [photoPreview, setPhotoPreview] = useState({ open: false, url: '', crewName: '' })
 
   const filteredCrew = useMemo(() => {
@@ -832,29 +835,116 @@ function App() {
     }
   }
 
+  async function downloadDatabaseBackup() {
+    setBackupLoading(true)
+
+    try {
+      const { data, headers } = await http.get('/admin/backup/export', {
+        headers: authHeader(),
+        responseType: 'blob',
+      })
+
+      const contentDisposition = headers?.['content-disposition'] || ''
+      const fileNameMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+      const fileName = fileNameMatch?.[1] || `crew-backup-${dayjs().format('YYYYMMDD-HHmmss')}.db`
+
+      const blobUrl = window.URL.createObjectURL(data)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = fileName
+      link.click()
+      window.URL.revokeObjectURL(blobUrl)
+
+      showToast('Backup database berhasil diunduh', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal mengunduh backup database'))
+    } finally {
+      setBackupLoading(false)
+    }
+  }
+
+  async function restoreDatabaseBackup(event) {
+    event.preventDefault()
+
+    if (!backupRestoreFile) {
+      setNotice('Pilih file backup (.db) terlebih dahulu')
+      return
+    }
+
+    const confirmed = window.confirm('Restore backup akan menimpa data saat ini. Lanjutkan?')
+    if (!confirmed) {
+      return
+    }
+
+    setBackupLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('backup', backupRestoreFile)
+
+      const { data } = await http.post('/admin/backup/restore', formData, {
+        headers: {
+          ...authHeader(),
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      setBackupRestoreFile(null)
+      if (backupRestoreInputRef.current) {
+        backupRestoreInputRef.current.value = ''
+      }
+
+      await loadAdminBootstrap()
+      setNotice(data?.message || 'Restore backup berhasil')
+      showToast('Restore backup berhasil', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal restore backup'))
+    } finally {
+      setBackupLoading(false)
+    }
+  }
+
   function startEditUser(user) {
     setEditingUserId(user.id)
-    setEditingUserName(user.name)
+    setEditingUserForm({
+      name: user.name || '',
+      ktp: user.ktp || '',
+      phone: user.phone || '',
+    })
   }
 
   function cancelEditUser() {
     setEditingUserId(null)
-    setEditingUserName('')
+    setEditingUserForm({ name: '', ktp: '', phone: '' })
   }
 
   async function saveEditUser(userId) {
-    if (!editingUserName.trim() || editingUserName.trim().length < 2) {
+    if (!editingUserForm.name.trim() || editingUserForm.name.trim().length < 2) {
       setNotice('Nama minimal 2 karakter')
       return
     }
 
+    if (!editingUserForm.ktp.trim() || editingUserForm.ktp.trim().length < 8) {
+      setNotice('KTP minimal 8 karakter')
+      return
+    }
+
+    if (!editingUserForm.phone.trim() || editingUserForm.phone.trim().length < 8) {
+      setNotice('No telp minimal 8 karakter')
+      return
+    }
+
     try {
-      await http.patch(`/admin/users/${userId}`, { name: editingUserName.trim() }, { headers: authHeader() })
+      await http.patch(`/admin/users/${userId}`, {
+        name: editingUserForm.name.trim(),
+        ktp: editingUserForm.ktp.trim(),
+        phone: editingUserForm.phone.trim(),
+      }, { headers: authHeader() })
       await loadAdminBootstrap()
       cancelEditUser()
-      showToast('Nama user berhasil diubah', 'success')
+      showToast('Data user berhasil diubah', 'success')
     } catch (error) {
-      setNotice(getErrorMessage(error, 'Gagal mengubah nama user'))
+      setNotice(getErrorMessage(error, 'Gagal mengubah data user'))
     }
   }
 
@@ -1042,6 +1132,7 @@ function App() {
     setSummaryRows([])
     setQrResult(null)
     setActiveDailyQrs([])
+    setBackupRestoreFile(null)
     setMode('crew')
     setNotice('Logout berhasil.')
   }
@@ -1321,8 +1412,8 @@ function App() {
                               <td>
                                 {editingUserId === user.id ? (
                                   <input
-                                    value={editingUserName}
-                                    onChange={(event) => setEditingUserName(event.target.value)}
+                                    value={editingUserForm.name}
+                                    onChange={(event) => setEditingUserForm((current) => ({ ...current, name: event.target.value }))}
                                     onKeyDown={(event) => {
                                       if (event.key === 'Enter') saveEditUser(user.id)
                                       if (event.key === 'Escape') cancelEditUser()
@@ -1332,8 +1423,32 @@ function App() {
                                   />
                                 ) : user.name}
                               </td>
-                              <td>{user.ktp || '-'}</td>
-                              <td>{user.phone}</td>
+                              <td>
+                                {editingUserId === user.id ? (
+                                  <input
+                                    value={editingUserForm.ktp}
+                                    onChange={(event) => setEditingUserForm((current) => ({ ...current, ktp: event.target.value }))}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') saveEditUser(user.id)
+                                      if (event.key === 'Escape') cancelEditUser()
+                                    }}
+                                    style={{ minWidth: 140, marginBottom: 0 }}
+                                  />
+                                ) : (user.ktp || '-')}
+                              </td>
+                              <td>
+                                {editingUserId === user.id ? (
+                                  <input
+                                    value={editingUserForm.phone}
+                                    onChange={(event) => setEditingUserForm((current) => ({ ...current, phone: event.target.value }))}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') saveEditUser(user.id)
+                                      if (event.key === 'Escape') cancelEditUser()
+                                    }}
+                                    style={{ minWidth: 130, marginBottom: 0 }}
+                                  />
+                                ) : user.phone}
+                              </td>
                               <td>{user.role}</td>
                               <td>
                                 <span className={`status-badge ${user.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}`}>
@@ -2000,6 +2115,29 @@ function App() {
                     </div>
                   )}
                 </form>
+                {canManageAdmin && (
+                  <form className="card" onSubmit={restoreDatabaseBackup}>
+                    <p className="section-label">Backup Database</p>
+                    <h2>Backup & Restore</h2>
+                    <p className="hint">Backup hanya mencakup database SQLite (.db), bukan file foto pada folder uploads.</p>
+
+                    <button type="button" onClick={downloadDatabaseBackup} disabled={backupLoading}>
+                      {backupLoading ? 'Memproses...' : 'Download backup terbaru'}
+                    </button>
+
+                    <hr />
+                    <label>Restore dari file backup (.db)</label>
+                    <input
+                      ref={backupRestoreInputRef}
+                      type="file"
+                      accept=".db,application/x-sqlite3,application/octet-stream"
+                      onChange={(event) => setBackupRestoreFile(event.target.files?.[0] || null)}
+                    />
+                    <button type="submit" className="secondary-action" disabled={backupLoading || !backupRestoreFile}>
+                      {backupLoading ? 'Memproses...' : 'Restore backup'}
+                    </button>
+                  </form>
+                )}
                 {canManageAdmin && (
                   <form className="card" onSubmit={createProject}>
                     <p className="section-label">Master Project</p>
