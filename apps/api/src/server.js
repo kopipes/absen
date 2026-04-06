@@ -1422,8 +1422,11 @@ app.get('/api/admin/reports/summary', requireRoles('ADMIN'), (req, res) => {
 
   const summary = db.prepare(`
     SELECT
+      ar.project_id,
+      ar.user_id,
       p.name AS project_name,
       u.name AS crew_name,
+      u.role AS position,
       date(ar.created_at) AS summary_date,
       MIN(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_IN' THEN ar.created_at END) AS attendance_check_in,
       MAX(CASE WHEN ar.flow_type = 'ATTENDANCE' AND ar.event_type = 'CHECK_OUT' THEN ar.created_at END) AS attendance_check_out,

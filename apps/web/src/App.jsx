@@ -66,6 +66,28 @@ const http = axios.create({
   baseURL: API_BASE,
 })
 
+function buildDateRange(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return []
+  }
+
+  const firstDate = dayjs(startDate)
+  const lastDate = dayjs(endDate)
+  if (!firstDate.isValid() || !lastDate.isValid() || firstDate.isAfter(lastDate, 'day')) {
+    return []
+  }
+
+  const dates = []
+  let cursor = firstDate
+
+  while (cursor.format('YYYY-MM-DD') <= lastDate.format('YYYY-MM-DD')) {
+    dates.push(cursor.format('YYYY-MM-DD'))
+    cursor = cursor.add(1, 'day')
+  }
+
+  return dates
+}
+
 const USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store']
 const ASSIGNMENT_ROLE_SET = new Set(['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 const NO_PASSWORD_ROLES = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
@@ -182,6 +204,41 @@ function App() {
     })
     return rows
   }, [reportData.overtimeAssignments, reportCrewSort])
+
+  const detailDateColumns = useMemo(
+    () => buildDateRange(summaryForm.startDate, summaryForm.endDate),
+    [summaryForm.startDate, summaryForm.endDate],
+  )
+
+  const detailSummaryRows = useMemo(() => {
+    const groups = new Map()
+
+    for (const row of summaryRows) {
+      const groupKey = `${row.project_id ?? row.project_name}::${row.user_id ?? row.crew_name}`
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          projectId: row.project_id,
+          projectName: row.project_name,
+          crewName: row.crew_name,
+          position: row.position || '-',
+          summaryByDate: new Map(),
+        })
+      }
+
+      groups.get(groupKey).summaryByDate.set(row.summary_date, row)
+    }
+
+    return Array.from(groups.values()).sort((left, right) => {
+      const projectCompare = String(left.projectName || '').localeCompare(String(right.projectName || ''), 'id', { sensitivity: 'base' })
+      if (projectCompare !== 0) {
+        return projectCompare
+      }
+
+      return String(left.crewName || '').localeCompare(String(right.crewName || ''), 'id', { sensitivity: 'base' })
+    })
+  }, [summaryRows])
+
+  const showDetailProjectColumn = !summaryForm.projectId
 
   const incompleteCrewSteps = useMemo(() => {
     const steps = []
@@ -786,6 +843,20 @@ function App() {
     }
   }
 
+  async function refreshDetailReport(event) {
+    event?.preventDefault()
+    try {
+      await loadSummary({
+        projectId: summaryForm.projectId || undefined,
+        startDate: summaryForm.startDate,
+        endDate: summaryForm.endDate,
+      })
+      setNotice('Detail absen berhasil dimuat ulang.')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal memuat detail absen'))
+    }
+  }
+
   async function downloadCsv() {
     try {
       const { data } = await http.get('/admin/reports/export', {
@@ -832,6 +903,57 @@ function App() {
       window.URL.revokeObjectURL(blobUrl)
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal export rangkuman'))
+    }
+  }
+
+  async function downloadDetailSummaryCsv() {
+    try {
+      const header = ['No']
+      if (showDetailProjectColumn) {
+        header.push('Project')
+      }
+      header.push('Nama', 'Posisi')
+
+      for (const date of detailDateColumns) {
+        const formattedDate = formatDate(date)
+        header.push(`${formattedDate} In`, `${formattedDate} Out`)
+      }
+
+      const escapeCsv = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
+
+      const rows = detailSummaryRows.map((row, index) => {
+        const values = [index + 1]
+        if (showDetailProjectColumn) {
+          values.push(row.projectName)
+        }
+        values.push(row.crewName, row.position)
+
+        for (const date of detailDateColumns) {
+          const dayRecord = row.summaryByDate.get(date)
+          values.push(
+            formatTime(dayRecord?.attendance_check_in),
+            formatTime(dayRecord?.attendance_check_out),
+          )
+        }
+
+        return values.map(escapeCsv).join(',')
+      })
+
+      const csvString = [header.map(escapeCsv).join(','), ...rows].join('\n')
+      const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' })
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const selectedProjectName = summaryForm.projectId
+        ? adminData.projects.find((project) => String(project.id) === String(summaryForm.projectId))?.name
+        : 'Semua-Project'
+      const safeProjectName = String(selectedProjectName || 'Semua-Project').replace(/[^a-zA-Z0-9-_]+/g, '-')
+
+      link.href = blobUrl
+      link.download = `detail-absen-${safeProjectName}-${summaryForm.startDate}-to-${summaryForm.endDate}.csv`
+      link.click()
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal export detail absen'))
     }
   }
 
@@ -1318,6 +1440,11 @@ function App() {
                     Rangkuman
                   </button>
                 )}
+                {canManageAdmin && (
+                  <button className={adminPage === 'detail-report' ? 'active' : ''} onClick={() => setAdminPage('detail-report')} type="button">
+                    Detail Absen
+                  </button>
+                )}
               </div>}
 
               {adminPage === 'users' && canManageAdmin ? (
@@ -1698,6 +1825,100 @@ function App() {
                     </table>
                   </div>
                   {summaryRows.length === 0 && <p className="hint">Belum ada data rangkuman pada filter ini.</p>}
+                </div>
+              ) : adminPage === 'detail-report' && canManageAdmin ? (
+                <div className="card">
+                  <div className="panel-header">
+                    <div>
+                      <p className="section-label">Detail Absen</p>
+                      <h2>Nama, posisi, dan detail absen per tanggal</h2>
+                    </div>
+                    <button className="secondary-action" onClick={downloadDetailSummaryCsv} type="button">
+                      Export CSV
+                    </button>
+                  </div>
+
+                  <form className="filter-row summary-filter-row" onSubmit={refreshDetailReport}>
+                    <select
+                      value={summaryForm.projectId}
+                      onChange={(event) => setSummaryForm((current) => ({ ...current, projectId: event.target.value }))}
+                    >
+                      <option value="">Semua project</option>
+                      {adminData.projects.map((project) => (
+                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
+                      ))}
+                    </select>
+                    <div className="summary-date-range">
+                      <p className="section-label">Date Range</p>
+                      <div className="summary-date-fields">
+                        <div className="summary-date-item">
+                          <label>Start</label>
+                          <input
+                            type="date"
+                            value={summaryForm.startDate}
+                            onChange={(event) => setSummaryForm((current) => ({ ...current, startDate: event.target.value }))}
+                          />
+                        </div>
+                        <div className="summary-date-item">
+                          <label>End</label>
+                          <input
+                            type="date"
+                            value={summaryForm.endDate}
+                            onChange={(event) => setSummaryForm((current) => ({ ...current, endDate: event.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <button type="submit">Muat detail</button>
+                  </form>
+
+                  <div className="table-wrap detail-report-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th rowSpan="2">No</th>
+                          {showDetailProjectColumn && <th rowSpan="2">Project</th>}
+                          <th rowSpan="2">Nama</th>
+                          <th rowSpan="2">Posisi</th>
+                          {detailDateColumns.map((date) => (
+                            <th key={date} colSpan="2">{formatDate(date)}</th>
+                          ))}
+                        </tr>
+                        <tr>
+                          {detailDateColumns.flatMap((date) => [
+                            <th key={`${date}-in`}>In</th>,
+                            <th key={`${date}-out`}>Out</th>,
+                          ])}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailSummaryRows.map((row, index) => (
+                          <tr key={`${row.projectId ?? row.projectName}-${row.crewName}-${index}`}>
+                            <td>{index + 1}</td>
+                            {showDetailProjectColumn && <td>{row.projectName}</td>}
+                            <td>{row.crewName}</td>
+                            <td>{row.position}</td>
+                            {detailDateColumns.flatMap((date) => {
+                              const dayRecord = row.summaryByDate.get(date)
+                              return [
+                                <td key={`${date}-in`}>
+                                  <div className="detail-day-cell">
+                                    <span>{formatTime(dayRecord?.attendance_check_in)}</span>
+                                  </div>
+                                </td>,
+                                <td key={`${date}-out`}>
+                                  <div className="detail-day-cell">
+                                    <span>{formatTime(dayRecord?.attendance_check_out)}</span>
+                                  </div>
+                                </td>,
+                              ]
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {detailSummaryRows.length === 0 && <p className="hint">Belum ada data detail absen pada filter ini.</p>}
                 </div>
               ) : adminPage === 'assignment-management' && canManageAdmin ? (
                 <div className="grid">

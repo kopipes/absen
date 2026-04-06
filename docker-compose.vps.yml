@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: crew-api
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost}
+    volumes:
+      - ./apps/api/data:/app/apps/api/data
+      - ./apps/api/uploads:/app/apps/api/uploads
+      - ./apps/api/backups:/app/apps/api/backups
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: /api
+    container_name: crew-web
+    depends_on:
+      - api
+    restart: unless-stopped
+    ports:
+      - "80:80"

@@ -1,0 +1,18 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/api/package.json apps/api/package.json
+
+# Install only API production dependencies from npm workspace.
+RUN npm ci --omit=dev --workspace apps/api
+
+COPY apps/api apps/api
+
+ENV NODE_ENV=production
+ENV PORT=4000
+
+EXPOSE 4000
+
+CMD ["npm", "run", "start", "-w", "apps/api"]
