@@ -131,6 +131,45 @@ function ProjectSelect({ projects, value, onChange, placeholder = 'Semua project
   )
 }
 
+function UserSelect({ users, value, onChange, placeholder = 'Pilih user' }) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return users
+    return users.filter((u) => u.name.toLowerCase().includes(q) || (u.phone || '').includes(q) || (u.role || '').toLowerCase().includes(q))
+  }, [users, search])
+  const selected = users.find((u) => String(u.id) === String(value))
+  useEffect(() => {
+    function onOut(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOut)
+    return () => document.removeEventListener('mousedown', onOut)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div onClick={() => setOpen((o) => !o)} style={{ padding: '8px 12px', border: '1.5px solid var(--line-strong)', borderRadius: '10px', background: 'var(--surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.88rem', color: selected ? '#102031' : '#6b7a8d', userSelect: 'none', minHeight: 38 }}>
+        <span>{selected ? `${selected.name} · ${selected.role}` : placeholder}</span>
+        <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>▾</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--surface)', border: '1.5px solid var(--line-strong)', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 200, maxHeight: 280, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '8px' }}><input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, no telp, atau role..." onClick={(e) => e.stopPropagation()} style={{ margin: 0, borderRadius: '8px' }} /></div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filtered.length === 0 && <div style={{ padding: '10px 12px', fontSize: '0.82rem', color: '#7a90a4' }}>Tidak ada hasil</div>}
+            {filtered.map((u) => (
+              <div key={u.id} onClick={() => { onChange(String(u.id)); setOpen(false); setSearch('') }} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.85rem', color: String(u.id) === String(value) ? 'var(--brand)' : '#102031', fontWeight: String(u.id) === String(value) ? 700 : 400, background: String(u.id) === String(value) ? 'rgba(13,109,119,0.07)' : 'transparent', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{u.name}</span>
+                <span style={{ fontSize: '0.72rem', color: String(u.id) === String(value) ? 'var(--brand)' : '#7a90a4', marginLeft: 8 }}>{u.role}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const tokenFromUrl = searchParams.get('token') || ''
@@ -2051,12 +2090,12 @@ function App() {
                       includeAll={false}
                     />
                     <label>User</label>
-                    <select value={assignmentForm.userId} onChange={(event) => setAssignmentForm((current) => ({ ...current, userId: event.target.value }))}>
-                      <option value="">Pilih user</option>
-                      {nonAdminUsers.map((user) => (
-                        <option key={user.id} value={user.id}>{user.name} · {user.role}</option>
-                      ))}
-                    </select>
+                    <UserSelect
+                      users={nonAdminUsers}
+                      value={assignmentForm.userId}
+                      onChange={(userId) => setAssignmentForm((current) => ({ ...current, userId }))}
+                      placeholder="Pilih user"
+                    />
                     <p className="hint">Role assignment otomatis mengikuti role user yang dipilih.</p>
                     <button type="submit">Simpan assignment</button>
                   </form>
