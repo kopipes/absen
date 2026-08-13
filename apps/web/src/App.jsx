@@ -730,9 +730,18 @@ function App() {
 
       await loadAdminBootstrap()
       showToast('Project berhasil dihapus.', 'success')
-      showToast('Project berhasil dihapus', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menghapus project'))
+    }
+  }
+
+  async function toggleProjectActive(project) {
+    try {
+      await http.patch(`/admin/projects/${project.id}/toggle-active`, {}, { headers: authHeader() })
+      await loadAdminBootstrap()
+      showToast(project.isActive ? 'Project dinonaktifkan.' : 'Project diaktifkan.', 'success')
+    } catch (error) {
+      setNotice(getErrorMessage(error, 'Gagal mengubah status project'))
     }
   }
 
@@ -2432,6 +2441,7 @@ function App() {
                             <th>Kode</th>
                             <th>Nama</th>
                             <th>PIC</th>
+                            <th>Status</th>
                             <th>Aksi</th>
                           </tr>
                         </thead>
@@ -2471,6 +2481,11 @@ function App() {
                                 ) : (project.picName || '-')}
                               </td>
                               <td>
+                                <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, background: project.isActive ? '#dcfce7' : '#fee2e2', color: project.isActive ? '#16a34a' : '#dc2626' }}>
+                                  {project.isActive ? 'Aktif' : 'Nonaktif'}
+                                </span>
+                              </td>
+                              <td>
                                 {editingProjectId === project.id ? (
                                   <div style={{ display: 'flex', gap: 4 }}>
                                     <button type="button" className="secondary-action" onClick={() => saveProject(project.id)}>Simpan</button>
@@ -2479,6 +2494,9 @@ function App() {
                                 ) : (
                                   <div style={{ display: 'flex', gap: 4 }}>
                                     <button type="button" className="secondary-action" onClick={() => startEditProject(project)}>Edit</button>
+                                    <button type="button" className="secondary-action" onClick={() => toggleProjectActive(project)}>
+                                      {project.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                                    </button>
                                     <button type="button" className="secondary-action" onClick={() => deleteProject(project)}>Hapus</button>
                                   </div>
                                 )}
@@ -2531,8 +2549,12 @@ function App() {
                     <p className="hint" style={{ marginBottom: 16 }}>{authState.user?.role} &middot; {dayjs().format('dddd, DD MMM YYYY')}</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                       <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.projects.filter(p => p.isActive).length}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Project Aktif</div>
+                      </div>
+                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.projects.length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Projects</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Project</div>
                       </div>
                       <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.users.length}</div>

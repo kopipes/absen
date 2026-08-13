@@ -820,6 +820,19 @@ app.post('/api/admin/projects', requireRoles('ADMIN'), (req, res) => {
   }
 })
 
+app.patch('/api/admin/projects/:projectId/toggle-active', requireRoles('ADMIN'), (req, res) => {
+  const projectId = Number(req.params.projectId)
+  if (Number.isNaN(projectId)) return res.status(400).json({ message: 'Project tidak valid' })
+
+  const project = db.prepare('SELECT id, is_active FROM projects WHERE id = ?').get(projectId)
+  if (!project) return res.status(404).json({ message: 'Project tidak ditemukan' })
+
+  const newActive = project.is_active ? 0 : 1
+  db.prepare('UPDATE projects SET is_active = ? WHERE id = ?').run(newActive, projectId)
+  createAuditLog(req.user.id, 'TOGGLE_PROJECT_ACTIVE', 'project', projectId, { isActive: Boolean(newActive) })
+  res.json({ message: newActive ? 'Project diaktifkan' : 'Project dinonaktifkan', isActive: Boolean(newActive) })
+})
+
 app.patch('/api/admin/projects/:projectId', requireRoles('ADMIN'), (req, res) => {
   const projectId = Number(req.params.projectId)
   const parsed = projectUpdateSchema.safeParse(req.body)
