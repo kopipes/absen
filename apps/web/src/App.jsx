@@ -1338,7 +1338,7 @@ function App() {
     setQrResult(null)
     setActiveDailyQrs([])
     setBackupRestoreFile(null)
-    setMode('crew')
+    setMode('admin')
     // setNotice('Logout berhasil.')
   }
 
