@@ -1487,7 +1487,8 @@ function App() {
             <input value={loginForm.phone} onChange={(event) => setLoginForm((current) => ({ ...current, phone: event.target.value }))} />
             <label>Password</label>
             <input type="password" value={loginForm.password} onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))} />
-            <button disabled={loadingAdmin} type="submit">{loadingAdmin ? 'Memproses...' : 'Login'}</button>
+            {notice && <div className="notice" style={{ marginTop: 8, marginBottom: 0 }}>{notice}</div>}
+            <button disabled={loadingAdmin} type="submit" style={{ marginTop: 16, width: '100%' }}>{loadingAdmin ? 'Memproses...' : 'Login'}</button>
           </form>
         </div>
       </div>
@@ -1648,7 +1649,7 @@ function App() {
                         <input value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} />
                       </>
                     )}
-                    <button type="submit">Simpan user</button>
+                    <button type="submit" style={{ marginTop: 16 }}>Simpan user</button>
 
                     <hr />
                     <p className="section-label">Upload massal crew</p>
@@ -2375,7 +2376,7 @@ function App() {
                         <option key={user.id} value={user.id}>{user.name}</option>
                       ))}
                     </select>
-                    <button type="submit">Simpan project</button>
+                    <button type="submit" style={{ marginTop: 16 }}>Simpan project</button>
                   </form>
 
                   <div className="card">
@@ -2526,7 +2527,7 @@ function App() {
                     />
                     <label>Tanggal QR</label>
                     <input type="date" value={qrForm.qrDate} onChange={(event) => setQrForm((current) => ({ ...current, qrDate: event.target.value }))} />
-                    <button type="submit">Generate QR</button>
+                    <button type="submit" style={{ marginTop: 16 }}>Generate QR</button>
                     {qrResult && (
                       <div className="qr-box">
                         <img alt="QR Harian" src={qrResult.imageDataUrl} />
