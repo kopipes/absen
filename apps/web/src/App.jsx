@@ -480,7 +480,6 @@ function App() {
 
       try {
         await loadAdminBootstrap(nextAuth.token, data.user.role)
-        setNotice(`Login berhasil, tetapi dashboard gagal dimuat: ${getErrorMessage(error, 'Tidak dapat memuat data admin')}`)
       } catch (error) {
         setNotice(`Login berhasil, tetapi dashboard gagal dimuat: ${getErrorMessage(error, 'Tidak dapat memuat data admin')}`)
       }
