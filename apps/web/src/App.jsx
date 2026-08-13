@@ -92,6 +92,45 @@ const USER_ROLES = ['ADMIN', 'PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back U
 const ASSIGNMENT_ROLE_SET = new Set(['PIC', 'CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 const NO_PASSWORD_ROLES = new Set(['CREW', 'HEAD CREW', 'KASIR', 'SPG', 'Back Up SPG', 'Talent', 'LO', 'Crew Store'])
 
+function ProjectSelect({ projects, value, onChange, placeholder = 'Semua project', includeAll = true }) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return projects
+    return projects.filter((p) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q))
+  }, [projects, search])
+  const selected = projects.find((p) => String(p.id) === String(value))
+  useEffect(() => {
+    function onOut(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOut)
+    return () => document.removeEventListener('mousedown', onOut)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div onClick={() => setOpen((o) => !o)} style={{ padding: '8px 12px', border: '1.5px solid var(--line-strong)', borderRadius: '10px', background: 'var(--surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.88rem', color: selected ? '#102031' : '#6b7a8d', userSelect: 'none', minHeight: 38 }}>
+        <span>{selected ? `${selected.code} · ${selected.name}` : placeholder}</span>
+        <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>▾</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--surface)', border: '1.5px solid var(--line-strong)', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 200, maxHeight: 260, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '8px' }}><input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari project..." onClick={(e) => e.stopPropagation()} style={{ margin: 0, borderRadius: '8px' }} /></div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {includeAll && <div onClick={() => { onChange(''); setOpen(false); setSearch('') }} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.85rem', color: !value ? 'var(--brand)' : '#3d5166', fontWeight: !value ? 700 : 400, background: !value ? 'rgba(13,109,119,0.07)' : 'transparent' }}>{placeholder}</div>}
+            {filtered.length === 0 && <div style={{ padding: '10px 12px', fontSize: '0.82rem', color: '#7a90a4' }}>Tidak ada hasil</div>}
+            {filtered.map((p) => (
+              <div key={p.id} onClick={() => { onChange(String(p.id)); setOpen(false); setSearch('') }} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.85rem', color: String(p.id) === String(value) ? 'var(--brand)' : '#102031', fontWeight: String(p.id) === String(value) ? 700 : 400, background: String(p.id) === String(value) ? 'rgba(13,109,119,0.07)' : 'transparent' }}>
+                <span style={{ color: '#7a90a4', fontSize: '0.75rem', marginRight: 6 }}>{p.code}</span>{p.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const tokenFromUrl = searchParams.get('token') || ''
@@ -112,7 +151,7 @@ function App() {
 
   const [authState, setAuthState] = useState({ token: '', user: null })
   const [adminPage, setAdminPage] = useState('dashboard')
-  const [loginForm, setLoginForm] = useState({ phone: '081100000001', password: 'admin123' })
+  const [loginForm, setLoginForm] = useState({ phone: '', password: '' })
   const [adminData, setAdminData] = useState({ projects: [], users: [] })
   const [projectCrew, setProjectCrew] = useState([])
   const [projectAssignments, setProjectAssignments] = useState([])
@@ -152,6 +191,9 @@ function App() {
   const [editingUserId, setEditingUserId] = useState(null)
   const [editingUserForm, setEditingUserForm] = useState({ name: '', ktp: '', phone: '' })
   const [photoPreview, setPhotoPreview] = useState({ open: false, url: '', crewName: '' })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [projectListPage, setProjectListPage] = useState(1)
+  const [projectListSearch, setProjectListSearch] = useState('')
 
   const filteredCrew = useMemo(() => {
     const query = crewSearch.trim().toLowerCase()
@@ -1259,53 +1301,35 @@ function App() {
     setNotice('Logout berhasil.')
   }
 
-  return (
-    <div className="shell">
-      <header className="masthead">
-        <div>
-          <p className="eyebrow">Crew Management PV</p>
-          <img className="app-logo" src="/emaki-logo.png" alt="EMAKI logo" />
-          <p className="subtitle">
-            Crew masuk lewat QR harian. Admin dan PIC mengelola project, assignment, lembur, dan laporan dari dashboard yang sama.
-          </p>
-        </div>
+  // Derived values for project list with search + pagination (change #5)
+  const filteredProjects = useMemo(() => {
+    const q = projectListSearch.trim().toLowerCase()
+    if (!q) return adminData.projects
+    return adminData.projects.filter(
+      (p) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q),
+    )
+  }, [adminData.projects, projectListSearch])
+  const projectListPageSize = 10
+  const projectListTotalPages = Math.max(1, Math.ceil(filteredProjects.length / projectListPageSize))
+  const pagedProjects = filteredProjects.slice(
+    (projectListPage - 1) * projectListPageSize,
+    projectListPage * projectListPageSize,
+  )
 
-        <div className="mode-switch">
-          <button className={mode === 'crew' ? 'active' : ''} onClick={() => setMode('crew')} type="button">
-            Crew
-          </button>
-          <button className={mode === 'admin' ? 'active' : ''} onClick={() => setMode('admin')} type="button">
-            Admin / PIC
-          </button>
-          {authState.user && (
-            <>
-              <button onClick={() => setShowChangePasswordModal(true)} type="button">
-                Ubah Password
-              </button>
-              <button onClick={logoutAdmin} type="button">
-                Logout
-              </button>
-            </>
-          )}
-        </div>
-      </header>
-
-      {notice && <div className="notice">{notice}</div>}
-
-      {toasts.length > 0 && (
-        <div className="toast-stack" role="status" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`toast ${toast.type === 'success' ? 'success' : ''}`}>
-              <p>{toast.message}</p>
-              <button type="button" onClick={() => dismissToast(toast.id)} aria-label="Tutup notifikasi">
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {mode === 'crew' ? (
+  if (mode === 'crew') {
+    return (
+      <div className="shell">
+        {toasts.length > 0 && (
+          <div className="toast-stack" role="status" aria-live="polite">
+            {toasts.map((toast) => (
+              <div key={toast.id} className={`toast ${toast.type === 'success' ? 'success' : ''}`}>
+                <p>{toast.message}</p>
+                <button type="button" onClick={() => dismissToast(toast.id)} aria-label="Tutup notifikasi">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {notice && <div className="notice">{notice}</div>}
         <section className="panel crew-layout">
           <div className="panel-header">
             <div>
@@ -1394,59 +1418,171 @@ function App() {
             </>
           )}
         </section>
-      ) : (
-        <section className="panel admin-layout">
-          {!authState.token ? (
-            <form className="card auth-card" onSubmit={loginAdmin}>
-              <p className="section-label">Login Admin / PIC</p>
-              <h2>Masuk ke dashboard</h2>
-              <label>Nomor HP</label>
-              <input value={loginForm.phone} onChange={(event) => setLoginForm((current) => ({ ...current, phone: event.target.value }))} />
-              <label>Password</label>
-              <input type="password" value={loginForm.password} onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))} />
-              <button disabled={loadingAdmin} type="submit">{loadingAdmin ? 'Memproses...' : 'Login'}</button>
-            </form>
-          ) : (
-            <div className="admin-grid">
-              {!isPicOnly && <div className="admin-nav">
-                {!isPicOnly && (
-                  <button className={adminPage === 'dashboard' ? 'active' : ''} onClick={() => setAdminPage('dashboard')} type="button">
-                    Dashboard
-                  </button>
-                )}
+      </div>
+    )
+  }
 
-                {canManageAdmin && (
-                  <button className={adminPage === 'users' ? 'active' : ''} onClick={() => setAdminPage('users')} type="button">
-                    List User
-                  </button>
-                )}
-                {canManageAdmin && (
-                  <button className={adminPage === 'assignment-management' ? 'active' : ''} onClick={() => setAdminPage('assignment-management')} type="button">
-                    Manajemen Assignment
-                  </button>
-                )}
-                {canManageAdmin && (
-                  <button className={adminPage === 'overtime-management' ? 'active' : ''} onClick={() => setAdminPage('overtime-management')} type="button">
-                    Manajemen Lembur
-                  </button>
-                )}
-                {canManageAdmin && (
-                  <button className={adminPage === 'report' ? 'active' : ''} onClick={() => setAdminPage('report')} type="button">
-                    Report
-                  </button>
-                )}
-                {canManageAdmin && (
-                  <button className={adminPage === 'summary' ? 'active' : ''} onClick={() => setAdminPage('summary')} type="button">
-                    Rangkuman
-                  </button>
-                )}
-                {canManageAdmin && (
-                  <button className={adminPage === 'detail-report' ? 'active' : ''} onClick={() => setAdminPage('detail-report')} type="button">
-                    Detail Absen
-                  </button>
-                )}
-              </div>}
+  if (!authState.token) {
+    return (
+      <div className="shell">
+        {toasts.length > 0 && (
+          <div className="toast-stack" role="status" aria-live="polite">
+            {toasts.map((toast) => (
+              <div key={toast.id} className={`toast ${toast.type === 'success' ? 'success' : ''}`}>
+                <p>{toast.message}</p>
+                <button type="button" onClick={() => dismissToast(toast.id)} aria-label="Tutup notifikasi">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {notice && <div className="notice">{notice}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+          <form className="card auth-card" onSubmit={loginAdmin} style={{ width: '100%', maxWidth: 360 }}>
+            <p className="section-label">Login Admin / PIC</p>
+            <h2>Masuk ke dashboard</h2>
+            <label>Nomor HP</label>
+            <input value={loginForm.phone} onChange={(event) => setLoginForm((current) => ({ ...current, phone: event.target.value }))} />
+            <label>Password</label>
+            <input type="password" value={loginForm.password} onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))} />
+            <button disabled={loadingAdmin} type="submit">{loadingAdmin ? 'Memproses...' : 'Login'}</button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
+  // Authenticated admin/PIC sidebar layout
+  const sidebarStyle = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: 220,
+    height: '100vh',
+    background: 'var(--surface)',
+    borderRight: '1.5px solid var(--line-strong)',
+    display: 'flex',
+    flexDirection: 'column',
+    zIndex: 100,
+    overflowY: 'auto',
+  }
+  const navItemStyle = (active) => ({
+    display: 'block',
+    width: '100%',
+    textAlign: 'left',
+    padding: '9px 18px',
+    background: active ? 'rgba(13,109,119,0.10)' : 'transparent',
+    color: active ? 'var(--brand)' : '#3d5166',
+    fontWeight: active ? 700 : 400,
+    fontSize: '0.88rem',
+    border: 'none',
+    cursor: 'pointer',
+    borderRadius: 0,
+  })
+  const sectionLabelStyle = {
+    padding: '14px 18px 4px',
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    color: '#9aacbb',
+    textTransform: 'uppercase',
+  }
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      {/* Fixed left sidebar */}
+      <div style={sidebarStyle}>
+        <div style={{ padding: '18px 18px 10px', borderBottom: '1.5px solid var(--line-strong)' }}>
+          <p style={{ fontSize: '0.7rem', color: '#9aacbb', margin: 0, marginBottom: 2 }}>Crew Management PV</p>
+          <p style={{ fontSize: '0.82rem', fontWeight: 700, color: '#102031', margin: 0 }}>Dashboard</p>
+        </div>
+
+        <nav style={{ flex: 1, paddingTop: 8 }}>
+          <button style={navItemStyle(adminPage === 'dashboard')} onClick={() => setAdminPage('dashboard')} type="button">
+            Dashboard
+          </button>
+          {canManageAdmin && (
+            <button style={navItemStyle(adminPage === 'projects')} onClick={() => setAdminPage('projects')} type="button">
+              Projects
+            </button>
+          )}
+          {canManageAdmin && (
+            <button style={navItemStyle(adminPage === 'users')} onClick={() => setAdminPage('users')} type="button">
+              Users
+            </button>
+          )}
+          {canManageAdmin && (
+            <button style={navItemStyle(adminPage === 'assignment-management')} onClick={() => setAdminPage('assignment-management')} type="button">
+              Assignment
+            </button>
+          )}
+          <button style={navItemStyle(adminPage === 'overtime-management')} onClick={() => setAdminPage('overtime-management')} type="button">
+            Lembur
+          </button>
+
+          {canManageAdmin && (
+            <>
+              <div style={sectionLabelStyle}>Laporan</div>
+              <button style={navItemStyle(adminPage === 'report')} onClick={() => setAdminPage('report')} type="button">
+                Laporan Harian
+              </button>
+              <button style={navItemStyle(adminPage === 'summary')} onClick={() => setAdminPage('summary')} type="button">
+                Ringkasan
+              </button>
+              <button style={navItemStyle(adminPage === 'detail-report')} onClick={() => setAdminPage('detail-report')} type="button">
+                Detail Absensi
+              </button>
+            </>
+          )}
+
+          {canManageAdmin && (
+            <>
+              <div style={sectionLabelStyle}>Sistem</div>
+              <button style={navItemStyle(adminPage === 'admin')} onClick={() => setAdminPage('admin')} type="button">
+                Admin
+              </button>
+            </>
+          )}
+        </nav>
+
+        {/* Sidebar footer */}
+        <div style={{ padding: '12px 18px', borderTop: '1.5px solid var(--line-strong)' }}>
+          <p style={{ fontSize: '0.78rem', fontWeight: 600, color: '#102031', margin: 0 }}>{authState.user?.name}</p>
+          <p style={{ fontSize: '0.72rem', color: '#7a90a4', margin: '2px 0 10px' }}>{authState.user?.role}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button
+              type="button"
+              style={{ fontSize: '0.78rem', padding: '6px 10px', background: 'transparent', border: '1.5px solid var(--line-strong)', borderRadius: 8, cursor: 'pointer', color: '#3d5166', textAlign: 'left' }}
+              onClick={() => setShowChangePasswordModal(true)}
+            >
+              Ubah Password
+            </button>
+            <button
+              type="button"
+              style={{ fontSize: '0.78rem', padding: '6px 10px', background: 'transparent', border: '1.5px solid var(--line-strong)', borderRadius: 8, cursor: 'pointer', color: '#c0392b', textAlign: 'left' }}
+              onClick={logoutAdmin}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div style={{ marginLeft: 220, flex: 1, minWidth: 0 }}>
+        {toasts.length > 0 && (
+          <div className="toast-stack" role="status" aria-live="polite">
+            {toasts.map((toast) => (
+              <div key={toast.id} className={`toast ${toast.type === 'success' ? 'success' : ''}`}>
+                <p>{toast.message}</p>
+                <button type="button" onClick={() => dismissToast(toast.id)} aria-label="Tutup notifikasi">×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {notice && <div className="notice">{notice}</div>}
+
+        <div className="admin-grid">
+          <div className="admin-content">
               {adminPage === 'users' && canManageAdmin ? (
                 <div className="grid">
                   <form className="card" onSubmit={createUser}>
@@ -1572,25 +1708,21 @@ function App() {
                                       if (event.key === 'Enter') saveEditUser(user.id)
                                       if (event.key === 'Escape') cancelEditUser()
                                     }}
-                                    style={{ minWidth: 130, marginBottom: 0 }}
+                                    style={{ minWidth: 120, marginBottom: 0 }}
                                   />
                                 ) : user.phone}
                               </td>
                               <td>{user.role}</td>
-                              <td>
-                                <span className={`status-badge ${user.status === 'ACTIVE' ? 'status-active' : 'status-inactive'}`}>
-                                  {user.status}
-                                </span>
-                              </td>
-                              <td>{user.projectNames.length ? user.projectNames.join(', ') : '-'}</td>
+                              <td>{user.status}</td>
+                              <td>{user.projectNames?.join(', ') || '-'}</td>
                               <td>
                                 {editingUserId === user.id ? (
-                                  <div className="action-row">
-                                    <button type="button" onClick={() => saveEditUser(user.id)}>Simpan</button>
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    <button type="button" className="secondary-action" onClick={() => saveEditUser(user.id)}>Simpan</button>
                                     <button type="button" className="secondary-action" onClick={cancelEditUser}>Batal</button>
                                   </div>
                                 ) : (
-                                  <div className="action-row">
+                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                     <button type="button" className="secondary-action" onClick={() => startEditUser(user)}>Edit</button>
                                     {user.role === 'PIC' && (
                                       <button type="button" className="secondary-action" onClick={() => changePicPassword(user)}>
@@ -1624,19 +1756,12 @@ function App() {
                   </div>
 
                   <form className="filter-row" onSubmit={refreshReports}>
-                    <select
+                    <ProjectSelect
+                      projects={adminData.projects}
                       value={reportForm.projectId}
-                      onChange={async (event) => {
-                        const projectId = event.target.value
-                        setReportForm((current) => ({ ...current, projectId }))
-                        await loadProjectCrew(projectId)
-                      }}
-                    >
-                      <option value="">Semua project</option>
-                      {adminData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => { setReportForm((c) => ({ ...c, projectId: v })); loadProjectCrew(v) }}
+                      placeholder="Semua project"
+                    />
                     <input type="date" value={reportForm.date} onChange={(event) => setReportForm((current) => ({ ...current, date: event.target.value }))} />
                     <select value={reportCrewSort} onChange={(event) => setReportCrewSort(event.target.value)}>
                       <option value="CREW_ASC">Crew A-Z</option>
@@ -1667,7 +1792,7 @@ function App() {
                             {sortedReportAttendance.map((row) => (
                               <tr key={row.id}>
                                 <td>{formatDateTime(row.created_at)}</td>
-                                <td>{row.project_code}</td>
+                                <td>{row.project_name}</td>
                                 <td>{row.crew_name}</td>
                                 <td>{row.flow_type}</td>
                                 <td>{row.event_type}</td>
@@ -1675,7 +1800,7 @@ function App() {
                                 <td>
                                   <input
                                     type="checkbox"
-                                    checked={row.latitude != null && row.longitude != null}
+                                    checked={Boolean(row.has_geo_tag)}
                                     readOnly
                                     disabled
                                     aria-label={`Geo tag ${row.crew_name}`}
@@ -1683,27 +1808,16 @@ function App() {
                                 </td>
                                 <td>
                                   {row.photo_path ? (
-                                    <button type="button" className="secondary-action" onClick={() => openPhotoPreview(row)}>
-                                      Lihat foto
+                                    <button
+                                      type="button"
+                                      className="secondary-action"
+                                      onClick={() => setPhotoPreview({ open: true, url: resolveUploadedPhotoUrl(row.photo_path), crewName: row.crew_name })}
+                                    >
+                                      Lihat
                                     </button>
-                                  ) : (
-                                    '-'
-                                  )}
+                                  ) : '-'}
                                 </td>
-                                <td>
-                                  <div className="action-row">
-                                    {row.status !== 'OK' && (
-                                      <button type="button" className="secondary-action" onClick={() => updateAttendanceReview(row, true)}>
-                                        Approve
-                                      </button>
-                                    )}
-                                    {row.status !== 'REJECTED' && (
-                                      <button type="button" className="secondary-action" onClick={() => updateAttendanceReview(row, false)}>
-                                        Tolak
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
+                                <td>{row.review_status || '-'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1763,15 +1877,12 @@ function App() {
                   </div>
 
                   <form className="filter-row summary-filter-row" onSubmit={refreshSummary}>
-                    <select
+                    <ProjectSelect
+                      projects={adminData.projects}
                       value={summaryForm.projectId}
-                      onChange={(event) => setSummaryForm((current) => ({ ...current, projectId: event.target.value }))}
-                    >
-                      <option value="">Semua project</option>
-                      {adminData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setSummaryForm((c) => ({ ...c, projectId: v }))}
+                      placeholder="Semua project"
+                    />
                     <div className="summary-date-range">
                       <p className="section-label">Date Range</p>
                       <div className="summary-date-fields">
@@ -1839,15 +1950,12 @@ function App() {
                   </div>
 
                   <form className="filter-row summary-filter-row" onSubmit={refreshDetailReport}>
-                    <select
+                    <ProjectSelect
+                      projects={adminData.projects}
                       value={summaryForm.projectId}
-                      onChange={(event) => setSummaryForm((current) => ({ ...current, projectId: event.target.value }))}
-                    >
-                      <option value="">Semua project</option>
-                      {adminData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setSummaryForm((c) => ({ ...c, projectId: v }))}
+                      placeholder="Semua project"
+                    />
                     <div className="summary-date-range">
                       <p className="section-label">Date Range</p>
                       <div className="summary-date-fields">
@@ -1926,20 +2034,17 @@ function App() {
                     <p className="section-label">Assignment</p>
                     <h2>Assign user ke project</h2>
                     <label>Project</label>
-                    <select
+                    <ProjectSelect
+                      projects={adminData.projects}
                       value={assignmentForm.projectId}
-                      onChange={async (event) => {
-                        const projectId = event.target.value
-                        setAssignmentForm((current) => ({ ...current, projectId }))
-                        await loadProjectCrew(projectId)
-                        await loadProjectAssignments(projectId)
+                      onChange={async (v) => {
+                        setAssignmentForm((c) => ({ ...c, projectId: v }))
+                        await loadProjectCrew(v)
+                        await loadProjectAssignments(v)
                       }}
-                    >
-                      <option value="">Pilih project</option>
-                      {adminData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                      ))}
-                    </select>
+                      placeholder="Pilih project"
+                      includeAll={false}
+                    />
                     <label>User</label>
                     <select value={assignmentForm.userId} onChange={(event) => setAssignmentForm((current) => ({ ...current, userId: event.target.value }))}>
                       <option value="">Pilih user</option>
@@ -1961,20 +2066,17 @@ function App() {
                     </div>
 
                     <form className="filter-row" onSubmit={(event) => event.preventDefault()}>
-                      <select
+                      <ProjectSelect
+                        projects={adminData.projects}
                         value={assignmentForm.projectId}
-                        onChange={async (event) => {
-                          const projectId = event.target.value
-                          setAssignmentForm((current) => ({ ...current, projectId }))
-                          await loadProjectCrew(projectId)
-                          await loadProjectAssignments(projectId)
+                        onChange={async (v) => {
+                          setAssignmentForm((c) => ({ ...c, projectId: v }))
+                          await loadProjectCrew(v)
+                          await loadProjectAssignments(v)
                         }}
-                      >
-                        <option value="">Pilih project</option>
-                        {adminData.projects.map((project) => (
-                          <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                        ))}
-                      </select>
+                        placeholder="Pilih project"
+                        includeAll={false}
+                      />
                     </form>
 
                     <div className="table-wrap">
@@ -2009,17 +2111,17 @@ function App() {
                               <td>{assignment.user_phone}</td>
                               <td>{assignment.assignment_role}</td>
                               <td>
-                                <div className="action-row">
-                                  {editingAssignmentId === assignment.id ? (
-                                    <>
-                                      <button type="button" className="secondary-action" onClick={() => saveProjectAssignment(assignment)}>Simpan</button>
-                                      <button type="button" className="secondary-action" onClick={cancelEditProjectAssignment}>Batal</button>
-                                    </>
-                                  ) : (
+                                {editingAssignmentId === assignment.id ? (
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    <button type="button" className="secondary-action" onClick={() => saveProjectAssignment(assignment.id)}>Simpan</button>
+                                    <button type="button" className="secondary-action" onClick={cancelEditProjectAssignment}>Batal</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', gap: 4 }}>
                                     <button type="button" className="secondary-action" onClick={() => startEditProjectAssignment(assignment)}>Edit</button>
-                                  )}
-                                  <button type="button" className="secondary-action" onClick={() => deleteProjectAssignment(assignment)}>Hapus</button>
-                                </div>
+                                    <button type="button" className="secondary-action" onClick={() => deleteProjectAssignment(assignment)}>Hapus</button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -2037,160 +2139,17 @@ function App() {
                     <p className="section-label">Lembur</p>
                     <h2>Assign crew lembur</h2>
                     <label>Project</label>
-                    <select
+                    <ProjectSelect
+                      projects={adminData.projects}
                       value={overtimeForm.projectId}
-                      onChange={async (event) => {
-                        const projectId = event.target.value
-                        setOvertimeForm((current) => ({ ...current, projectId, userIds: [] }))
-                        await loadProjectCrew(projectId)
-                        await loadOvertimeAssignments(projectId, overtimeForm.assignmentDate)
+                      onChange={async (v) => {
+                        setOvertimeForm((c) => ({ ...c, projectId: v, userIds: [] }))
+                        await loadProjectCrew(v)
+                        await loadOvertimeAssignments(v, overtimeForm.assignmentDate)
                       }}
-                    >
-                      <option value="">Pilih project</option>
-                      {adminData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                      ))}
-                    </select>
-                    <label>Tanggal lembur</label>
-                    <input
-                      type="date"
-                      value={overtimeForm.assignmentDate}
-                      onChange={async (event) => {
-                        const assignmentDate = event.target.value
-                        setOvertimeForm((current) => ({ ...current, assignmentDate }))
-                        if (overtimeForm.projectId) {
-                          await loadOvertimeAssignments(overtimeForm.projectId, assignmentDate)
-                        }
-                      }}
+                      placeholder="Pilih project"
+                      includeAll={false}
                     />
-                    <label>Pilih crew</label>
-                    <div className="checkbox-list">
-                      {projectCrew.map((crew) => (
-                        <label key={crew.id} className="checkbox-item">
-                          <input
-                            checked={overtimeForm.userIds.includes(String(crew.id))}
-                            onChange={(event) => {
-                              setOvertimeForm((current) => ({
-                                ...current,
-                                userIds: event.target.checked
-                                  ? [...current.userIds, String(crew.id)]
-                                  : current.userIds.filter((id) => id !== String(crew.id)),
-                              }))
-                            }}
-                            type="checkbox"
-                          />
-                          <span>{crew.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <button type="submit">Assign lembur</button>
-                  </form>
-
-                  <div className="card">
-                    <div className="panel-header">
-                      <div>
-                        <p className="section-label">Manajemen Lembur</p>
-                        <h2>Hapus assignment lembur</h2>
-                      </div>
-                      <span className="tag">{overtimeAssignments.length} data</span>
-                    </div>
-
-                    <form className="filter-row" onSubmit={(event) => event.preventDefault()}>
-                      <select
-                        value={overtimeForm.projectId}
-                        onChange={async (event) => {
-                          const projectId = event.target.value
-                          setOvertimeForm((current) => ({ ...current, projectId, userIds: [] }))
-                          await loadProjectCrew(projectId)
-                          await loadOvertimeAssignments(projectId, overtimeForm.assignmentDate)
-                        }}
-                      >
-                        <option value="">Pilih project</option>
-                        {adminData.projects.map((project) => (
-                          <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="date"
-                        value={overtimeForm.assignmentDate}
-                        onChange={async (event) => {
-                          const assignmentDate = event.target.value
-                          setOvertimeForm((current) => ({ ...current, assignmentDate }))
-                          if (overtimeForm.projectId) {
-                            await loadOvertimeAssignments(overtimeForm.projectId, assignmentDate)
-                          }
-                        }}
-                      />
-                    </form>
-
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Crew</th>
-                            <th>No Telp</th>
-                            <th>Tanggal</th>
-                            <th>Assigned by</th>
-                            <th>Status</th>
-                            <th>Hapus</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {overtimeAssignments.map((assignment) => (
-                            <tr key={assignment.id}>
-                              <td>{assignment.user_name}</td>
-                              <td>{assignment.user_phone}</td>
-                              <td>{assignment.assignment_date}</td>
-                              <td>{assignment.assigned_by_name || '-'}</td>
-                              <td>{assignment.status}</td>
-                              <td>
-                                <button type="button" className="secondary-action" onClick={() => deleteOvertimeAssignment(assignment)}>Hapus</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {loadingOvertimeAssignments && <p className="hint">Memuat data lembur...</p>}
-                    {!loadingOvertimeAssignments && overtimeAssignments.length === 0 && <p className="hint">Belum ada assignment lembur pada tanggal ini.</p>}
-                  </div>
-                </div>
-              ) : adminPage === 'overtime' && isPicOnly ? (
-                <div className="grid">
-                  <div className="card hero-card">
-                    <p className="section-label">Session PIC</p>
-                    <h2>{authState.user?.name}</h2>
-                    <p className="hint">Akses PIC dibatasi hanya untuk assignment lembur.</p>
-                    <div className="stats-row">
-                      <div>
-                        <strong>{adminData.projects.length}</strong>
-                        <span>Project PIC</span>
-                      </div>
-                      <div>
-                        <strong>{projectCrew.length}</strong>
-                        <span>Crew Project</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <form className="card" onSubmit={assignOvertime}>
-                    <p className="section-label">Lembur</p>
-                    <h2>Assign crew lembur</h2>
-                    <label>Project</label>
-                    <select
-                      value={overtimeForm.projectId}
-                      onChange={async (event) => {
-                        const projectId = event.target.value
-                        setOvertimeForm((current) => ({ ...current, projectId, userIds: [] }))
-                        await loadProjectCrew(projectId)
-                        await loadOvertimeAssignments(projectId, overtimeForm.assignmentDate)
-                      }}
-                    >
-                      <option value="">Pilih project</option>
-                      {adminData.projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                      ))}
-                    </select>
                     <label>Tanggal lembur</label>
                     <input
                       type="date"
@@ -2261,85 +2220,216 @@ function App() {
                     {!loadingOvertimeAssignments && overtimeAssignments.length === 0 && <p className="hint">Belum ada assignment lembur pada tanggal ini.</p>}
                   </div>
                 </div>
-              ) : (
-              <div className="grid">
-                <div className="card hero-card">
-                  <p className="section-label">Session</p>
-                  <h2>{authState.user?.name}</h2>
-                  <p className="hint">Role: {authState.user?.role}</p>
-                  <div className="stats-row">
-                    <div>
-                      <strong>{adminData.projects.length}</strong>
-                      <span>Project</span>
-                    </div>
-                    <div>
-                      <strong>{adminData.users.length}</strong>
-                      <span>User</span>
-                    </div>
-                    <div>
-                      <strong>{projectCrew.length}</strong>
-                      <span>Crew aktif</span>
+              ) : adminPage === 'overtime' && isPicOnly ? (
+                <div className="grid">
+                  <div className="card hero-card">
+                    <p className="section-label">Session PIC</p>
+                    <h2>{authState.user?.name}</h2>
+                    <p className="hint">Akses PIC dibatasi hanya untuk assignment lembur.</p>
+                    <div className="stats-row">
+                      <div>
+                        <strong>{adminData.projects.length}</strong>
+                        <span>Project PIC</span>
+                      </div>
+                      <div>
+                        <strong>{projectCrew.length}</strong>
+                        <span>Crew aktif</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <form className="card" onSubmit={generateQr}>
-                  <p className="section-label">QR Harian</p>
-                  <h2>Generate akses crew</h2>
-                  <label>Project</label>
-                  <select value={qrForm.projectId} onChange={(event) => setQrForm((current) => ({ ...current, projectId: event.target.value }))}>
-                    <option value="">Pilih project</option>
-                    {adminData.projects.map((project) => (
-                      <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
-                    ))}
-                  </select>
-                  <label>Tanggal QR</label>
-                  <input type="date" value={qrForm.qrDate} onChange={(event) => setQrForm((current) => ({ ...current, qrDate: event.target.value }))} />
-                  <button type="submit">Generate QR</button>
-                  {qrResult && (
-                    <div className="qr-box">
-                      <img alt="QR Harian" src={qrResult.imageDataUrl} />
-                      <p className="hint break-all">{qrResult.qrValue}</p>
+                  <form className="card" onSubmit={assignOvertime}>
+                    <p className="section-label">Lembur</p>
+                    <h2>Assign crew lembur</h2>
+                    <label>Project</label>
+                    <ProjectSelect
+                      projects={adminData.projects}
+                      value={overtimeForm.projectId}
+                      onChange={async (v) => {
+                        setOvertimeForm((c) => ({ ...c, projectId: v, userIds: [] }))
+                        await loadProjectCrew(v)
+                        await loadOvertimeAssignments(v, overtimeForm.assignmentDate)
+                      }}
+                      placeholder="Pilih project"
+                      includeAll={false}
+                    />
+                    <input
+                      type="date"
+                      value={overtimeForm.assignmentDate}
+                      onChange={async (event) => {
+                        const assignmentDate = event.target.value
+                        setOvertimeForm((current) => ({ ...current, assignmentDate }))
+                        if (overtimeForm.projectId) {
+                          await loadOvertimeAssignments(overtimeForm.projectId, assignmentDate)
+                        }
+                      }}
+                    />
+                    <div className="checkbox-list">
+                      {projectCrew.map((crew) => (
+                        <label key={crew.id} className="checkbox-item">
+                          <input
+                            checked={overtimeForm.userIds.includes(String(crew.id))}
+                            onChange={(event) => {
+                              setOvertimeForm((current) => ({
+                                ...current,
+                                userIds: event.target.checked
+                                  ? [...current.userIds, String(crew.id)]
+                                  : current.userIds.filter((id) => id !== String(crew.id)),
+                              }))
+                            }}
+                            type="checkbox"
+                          />
+                          <span>{crew.name}</span>
+                        </label>
+                      ))}
                     </div>
-                  )}
-                  <label>QR aktif hari ini</label>
-                  {activeDailyQrs.length === 0 ? (
-                    <p className="hint">Belum ada QR aktif hari ini.</p>
-                  ) : (
+                    <button type="submit">Assign lembur</button>
+                  </form>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Crew</th>
+                          <th>No Telp</th>
+                          <th>Tanggal</th>
+                          <th>Assigned by</th>
+                          <th>Status</th>
+                          <th>Hapus</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {overtimeAssignments.map((assignment) => (
+                          <tr key={assignment.id}>
+                            <td>{assignment.user_name}</td>
+                            <td>{assignment.user_phone}</td>
+                            <td>{assignment.assignment_date}</td>
+                            <td>{assignment.assigned_by_name || '-'}</td>
+                            <td>{assignment.status}</td>
+                            <td>
+                              <button type="button" className="secondary-action" onClick={() => deleteOvertimeAssignment(assignment)}>Hapus</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {loadingOvertimeAssignments && <p className="hint">Memuat data lembur...</p>}
+                  {!loadingOvertimeAssignments && overtimeAssignments.length === 0 && <p className="hint">Belum ada assignment lembur pada tanggal ini.</p>}
+                </div>
+              ) : adminPage === 'projects' && canManageAdmin ? (
+                <div className="grid">
+                  <form className="card" onSubmit={createProject}>
+                    <p className="section-label">Master Project</p>
+                    <h2>Tambah project</h2>
+                    <label>Kode project</label>
+                    <input value={projectForm.code} onChange={(event) => setProjectForm((current) => ({ ...current, code: event.target.value }))} />
+                    <label>Nama project</label>
+                    <input value={projectForm.name} onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))} />
+                    <label>PIC Event</label>
+                    <select value={projectForm.picUserId} onChange={(event) => setProjectForm((current) => ({ ...current, picUserId: event.target.value }))}>
+                      <option value="">Pilih PIC</option>
+                      {picOptions.map((user) => (
+                        <option key={user.id} value={user.id}>{user.name}</option>
+                      ))}
+                    </select>
+                    <button type="submit">Simpan project</button>
+                  </form>
+
+                  <div className="card">
+                    <div className="panel-header">
+                      <div>
+                        <p className="section-label">List Project</p>
+                        <h2>Daftar project</h2>
+                      </div>
+                      <span className="tag">{filteredProjects.length} project</span>
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <input
+                        value={projectListSearch}
+                        onChange={(event) => { setProjectListSearch(event.target.value); setProjectListPage(1) }}
+                        placeholder="Cari kode atau nama project..."
+                      />
+                    </div>
                     <div className="table-wrap">
                       <table>
                         <thead>
                           <tr>
-                            <th>Project</th>
-                            <th>Berlaku sampai</th>
-                            <th>Link QR</th>
-                            <th>Copy</th>
-                            <th>Hapus</th>
+                            <th>Kode</th>
+                            <th>Nama</th>
+                            <th>PIC</th>
+                            <th>Aksi</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {activeDailyQrs.map((item) => (
-                            <tr key={item.id}>
-                              <td>{item.projectCode} · {item.projectName}</td>
-                              <td>{formatDateTime(item.expiresAt)}</td>
-                              <td className="break-all">{item.qrValue}</td>
+                          {pagedProjects.map((project) => (
+                            <tr key={project.id}>
                               <td>
-                                <button className="secondary-action" type="button" onClick={() => copyQrLink(item.qrValue)}>Copy</button>
+                                {editingProjectId === project.id ? (
+                                  <input
+                                    value={editingProjectForm.code}
+                                    onChange={(event) => setEditingProjectForm((current) => ({ ...current, code: event.target.value }))}
+                                    style={{ minWidth: 80, marginBottom: 0 }}
+                                  />
+                                ) : project.code}
                               </td>
                               <td>
-                                <button className="secondary-action" type="button" onClick={() => deleteActiveQr(item)}>Hapus</button>
+                                {editingProjectId === project.id ? (
+                                  <input
+                                    value={editingProjectForm.name}
+                                    onChange={(event) => setEditingProjectForm((current) => ({ ...current, name: event.target.value }))}
+                                    style={{ minWidth: 160, marginBottom: 0 }}
+                                  />
+                                ) : project.name}
+                              </td>
+                              <td>
+                                {editingProjectId === project.id ? (
+                                  <select
+                                    value={editingProjectForm.picUserId}
+                                    onChange={(event) => setEditingProjectForm((current) => ({ ...current, picUserId: event.target.value }))}
+                                    style={{ marginBottom: 0 }}
+                                  >
+                                    <option value="">Pilih PIC</option>
+                                    {picOptions.map((user) => (
+                                      <option key={user.id} value={user.id}>{user.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (project.picName || '-')}
+                              </td>
+                              <td>
+                                {editingProjectId === project.id ? (
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    <button type="button" className="secondary-action" onClick={() => saveProject(project.id)}>Simpan</button>
+                                    <button type="button" className="secondary-action" onClick={cancelEditProject}>Batal</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    <button type="button" className="secondary-action" onClick={() => startEditProject(project)}>Edit</button>
+                                    <button type="button" className="secondary-action" onClick={() => deleteProject(project)}>Hapus</button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  )}
-                </form>
-                {canManageAdmin && (
+                    {projectListTotalPages > 1 && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+                        <button type="button" className="secondary-action" onClick={() => setProjectListPage(1)} disabled={projectListPage === 1}>«</button>
+                        <button type="button" className="secondary-action" onClick={() => setProjectListPage((p) => Math.max(1, p - 1))} disabled={projectListPage === 1}>‹</button>
+                        <span style={{ fontSize: '0.82rem', color: '#7a90a4' }}>Hal {projectListPage} / {projectListTotalPages}</span>
+                        <button type="button" className="secondary-action" onClick={() => setProjectListPage((p) => Math.min(projectListTotalPages, p + 1))} disabled={projectListPage === projectListTotalPages}>›</button>
+                        <button type="button" className="secondary-action" onClick={() => setProjectListPage(projectListTotalPages)} disabled={projectListPage === projectListTotalPages}>»</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : adminPage === 'admin' && canManageAdmin ? (
+                <div className="grid">
                   <form className="card" onSubmit={restoreDatabaseBackup}>
                     <p className="section-label">Backup Database</p>
-                    <h2>Backup & Restore</h2>
+                    <h2>Backup &amp; Restore</h2>
                     <p className="hint">Backup hanya mencakup database SQLite (.db), bukan file foto pada folder uploads.</p>
 
                     <button type="button" onClick={downloadDatabaseBackup} disabled={backupLoading}>
@@ -2358,151 +2448,137 @@ function App() {
                       {backupLoading ? 'Memproses...' : 'Restore backup'}
                     </button>
                   </form>
-                )}
-                {canManageAdmin && (
-                  <form className="card" onSubmit={createProject}>
-                    <p className="section-label">Master Project</p>
-                    <h2>Tambah project</h2>
-                    <label>Kode project</label>
-                    <input value={projectForm.code} onChange={(event) => setProjectForm((current) => ({ ...current, code: event.target.value }))} />
-                    <label>Nama project</label>
-                    <input value={projectForm.name} onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))} />
-                    <label>PIC Event</label>
-                    <select value={projectForm.picUserId} onChange={(event) => setProjectForm((current) => ({ ...current, picUserId: event.target.value }))}>
-                      <option value="">Pilih PIC</option>
-                      {picOptions.map((user) => (
-                        <option key={user.id} value={user.id}>{user.name}</option>
-                      ))}
-                    </select>
-                    <button type="submit">Simpan project</button>
-
-                    <label>List project</label>
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Kode</th>
-                            <th>Nama</th>
-                            <th>PIC</th>
-                            <th>Aksi</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {adminData.projects.map((project) => (
-                            <tr key={project.id}>
-                              <td>
-                                {editingProjectId === project.id ? (
-                                  <input value={editingProjectForm.code} onChange={(event) => setEditingProjectForm((current) => ({ ...current, code: event.target.value }))} />
-                                ) : project.code}
-                              </td>
-                              <td>
-                                {editingProjectId === project.id ? (
-                                  <input value={editingProjectForm.name} onChange={(event) => setEditingProjectForm((current) => ({ ...current, name: event.target.value }))} />
-                                ) : project.name}
-                              </td>
-                              <td>
-                                {editingProjectId === project.id ? (
-                                  <select value={editingProjectForm.picUserId} onChange={(event) => setEditingProjectForm((current) => ({ ...current, picUserId: event.target.value }))}>
-                                    <option value="">Tanpa PIC</option>
-                                    {picOptions.map((user) => (
-                                      <option key={user.id} value={user.id}>{user.name}</option>
-                                    ))}
-                                  </select>
-                                ) : (project.picName || '-')}
-                              </td>
-                              <td>
-                                {editingProjectId === project.id ? (
-                                  <div className="action-row">
-                                    <button type="button" onClick={() => saveProject(project.id)}>Simpan</button>
-                                    <button className="secondary-action" type="button" onClick={cancelEditProject}>Batal</button>
-                                  </div>
-                                ) : (
-                                  <div className="action-row">
-                                    <button type="button" onClick={() => startEditProject(project)}>Edit</button>
-                                    <button className="secondary-action" type="button" onClick={() => deleteProject(project)}>Hapus</button>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                </div>
+              ) : (
+                <div className="grid">
+                  <div className="card hero-card">
+                    <p className="section-label">Session</p>
+                    <h2>{authState.user?.name}</h2>
+                    <p className="hint">Role: {authState.user?.role}</p>
+                    <div className="stats-row">
+                      <div>
+                        <strong>{adminData.projects.length}</strong>
+                        <span>Project</span>
+                      </div>
+                      <div>
+                        <strong>{adminData.users.length}</strong>
+                        <span>User</span>
+                      </div>
+                      <div>
+                        <strong>{projectCrew.length}</strong>
+                        <span>Crew aktif</span>
+                      </div>
                     </div>
-                  </form>
-                )}
-              </div>
-              )}
-            </div>
-          )}
-        </section>
-      )}
+                  </div>
 
+                  <form className="card" onSubmit={generateQr}>
+                    <p className="section-label">QR Harian</p>
+                    <h2>Generate akses crew</h2>
+                    <label>Project</label>
+                    <ProjectSelect
+                      projects={adminData.projects}
+                      value={qrForm.projectId}
+                      onChange={(v) => setQrForm((c) => ({ ...c, projectId: v }))}
+                      placeholder="Pilih project"
+                      includeAll={false}
+                    />
+                    <label>Tanggal QR</label>
+                    <input type="date" value={qrForm.qrDate} onChange={(event) => setQrForm((current) => ({ ...current, qrDate: event.target.value }))} />
+                    <button type="submit">Generate QR</button>
+                    {qrResult && (
+                      <div className="qr-box">
+                        <img alt="QR Harian" src={qrResult.imageDataUrl} />
+                        <p className="hint break-all">{qrResult.qrValue}</p>
+                      </div>
+                    )}
+                    <label>QR aktif hari ini</label>
+                    {activeDailyQrs.length === 0 ? (
+                      <p className="hint">Belum ada QR aktif hari ini.</p>
+                    ) : (
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Project</th>
+                              <th>Berlaku sampai</th>
+                              <th>Link QR</th>
+                              <th>Copy</th>
+                              <th>Hapus</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeDailyQrs.map((item) => (
+                              <tr key={item.id}>
+                                <td>{item.projectCode} · {item.projectName}</td>
+                                <td>{formatDateTime(item.expiresAt)}</td>
+                                <td className="break-all">{item.qrValue}</td>
+                                <td>
+                                  <button className="secondary-action" type="button" onClick={() => copyQrLink(item.qrValue)}>Copy</button>
+                                </td>
+                                <td>
+                                  <button className="secondary-action" type="button" onClick={() => deleteActiveQr(item)}>Hapus</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </form>
+                </div>
+              )}
+          </div>
+        </div>
+      </div>
+
+      {/* Change Password Modal */}
       {showChangePasswordModal && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <div className="modal-overlay" onClick={() => setShowChangePasswordModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Ubah Password</h2>
+              <h3>Ubah Password</h3>
               <button
                 className="modal-close"
-                onClick={() => {
-                  setShowChangePasswordModal(false)
-                  setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
-                }}
+                onClick={() => setShowChangePasswordModal(false)}
                 type="button"
               >
                 ×
               </button>
             </div>
             <form className="modal-body" onSubmit={handleChangePassword}>
-              <label>Password Lama</label>
+              {notice && <div className="notice">{notice}</div>}
+              <label>Password lama</label>
               <input
                 type="password"
                 value={changePasswordForm.oldPassword}
                 onChange={(event) => setChangePasswordForm((current) => ({ ...current, oldPassword: event.target.value }))}
-                placeholder="Masukkan password lama"
               />
-
-              <label>Password Baru</label>
+              <label>Password baru</label>
               <input
                 type="password"
                 value={changePasswordForm.newPassword}
                 onChange={(event) => setChangePasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
-                placeholder="Masukkan password baru"
               />
-
-              <label>Konfirmasi Password Baru</label>
+              <label>Konfirmasi password baru</label>
               <input
                 type="password"
                 value={changePasswordForm.confirmPassword}
                 onChange={(event) => setChangePasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
-                placeholder="Konfirmasi password baru"
               />
-
-              <div className="modal-actions">
-                <button type="submit" disabled={changePasswordLoading}>
-                  {changePasswordLoading ? 'Menyimpan...' : 'Simpan'}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() => {
-                    setShowChangePasswordModal(false)
-                    setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
-                  }}
-                >
-                  Batal
-                </button>
-              </div>
+              <button type="submit" disabled={changePasswordLoading}>
+                {changePasswordLoading ? 'Menyimpan...' : 'Simpan password'}
+              </button>
             </form>
           </div>
         </div>
       )}
 
+      {/* Photo Preview Modal */}
       {photoPreview.open && (
         <div className="modal-overlay" onClick={() => setPhotoPreview({ open: false, url: '', crewName: '' })}>
-          <div className="modal photo-preview-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Foto {photoPreview.crewName}</h2>
+              <h3>Foto {photoPreview.crewName}</h3>
               <button
                 className="modal-close"
                 onClick={() => setPhotoPreview({ open: false, url: '', crewName: '' })}
