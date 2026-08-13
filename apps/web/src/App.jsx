@@ -1336,12 +1336,17 @@ function App() {
               <p className="section-label">Akses Crew</p>
               <h2>{publicProject ? publicProject.name : 'Scan QR harian terlebih dahulu'}</h2>
             </div>
-            {publicProject && (
-              <div className="tag-stack">
-                <span className="tag">{publicProject.code}</span>
-                <span className="tag">Berlaku sampai {dayjs(publicProject.expiresAt).format('HH:mm')}</span>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {publicProject && (
+                <div className="tag-stack">
+                  <span className="tag">{publicProject.code}</span>
+                  <span className="tag">Berlaku sampai {dayjs(publicProject.expiresAt).format('HH:mm')}</span>
+                </div>
+              )}
+              <button type="button" className="secondary-action" onClick={() => setMode('admin')}>
+                Admin / PIC →
+              </button>
+            </div>
           </div>
 
           {!tokenFromUrl ? (
