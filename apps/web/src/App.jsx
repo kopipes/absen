@@ -227,6 +227,7 @@ function App() {
     endDate: dayjs().format('YYYY-MM-DD'),
   })
   const [userListFilters, setUserListFilters] = useState({ search: '', role: '', status: '', project: '' })
+  const [userListPage, setUserListPage] = useState(1)
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
   const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
   const [changePasswordLoading, setChangePasswordLoading] = useState(false)
@@ -1690,21 +1691,21 @@ function App() {
                     <div className="filter-grid">
                       <input
                         value={userListFilters.search}
-                        onChange={(event) => setUserListFilters((current) => ({ ...current, search: event.target.value }))}
+                        onChange={(event) => { setUserListFilters((current) => ({ ...current, search: event.target.value })); setUserListPage(1) }}
                         placeholder="Cari nama atau no telp"
                       />
-                      <select value={userListFilters.role} onChange={(event) => setUserListFilters((current) => ({ ...current, role: event.target.value }))}>
+                      <select value={userListFilters.role} onChange={(event) => { setUserListFilters((current) => ({ ...current, role: event.target.value })); setUserListPage(1) }}>
                         <option value="">Semua role</option>
                         {USER_ROLES.map((role) => (
                           <option key={role} value={role}>{role}</option>
                         ))}
                       </select>
-                      <select value={userListFilters.status} onChange={(event) => setUserListFilters((current) => ({ ...current, status: event.target.value }))}>
+                      <select value={userListFilters.status} onChange={(event) => { setUserListFilters((current) => ({ ...current, status: event.target.value })); setUserListPage(1) }}>
                         <option value="">Semua status</option>
                         <option value="ACTIVE">ACTIVE</option>
                         <option value="INACTIVE">INACTIVE</option>
                       </select>
-                      <select value={userListFilters.project} onChange={(event) => setUserListFilters((current) => ({ ...current, project: event.target.value }))}>
+                      <select value={userListFilters.project} onChange={(event) => { setUserListFilters((current) => ({ ...current, project: event.target.value })); setUserListPage(1) }}>
                         <option value="">Semua project</option>
                         {adminData.projects.map((project) => (
                           <option key={project.id} value={project.name}>{project.name}</option>
@@ -1726,7 +1727,7 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredAdminUsers.map((user) => (
+                          {filteredAdminUsers.slice((userListPage - 1) * 10, userListPage * 10).map((user) => (
                             <tr key={user.id}>
                               <td>
                                 {editingUserId === user.id ? (
@@ -1797,6 +1798,23 @@ function App() {
                         </tbody>
                       </table>
                     </div>
+                    {(() => {
+                      const totalPages = Math.ceil(filteredAdminUsers.length / 10)
+                      if (totalPages <= 1) return null
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--ink-3)' }}>
+                            Halaman {userListPage} dari {totalPages} &middot; {filteredAdminUsers.length} user
+                          </span>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button type="button" className="secondary-action" style={{ padding: '4px 10px', fontSize: '0.8rem' }} disabled={userListPage === 1} onClick={() => setUserListPage(1)}>&#171;</button>
+                            <button type="button" className="secondary-action" style={{ padding: '4px 10px', fontSize: '0.8rem' }} disabled={userListPage === 1} onClick={() => setUserListPage(p => p - 1)}>&#8249;</button>
+                            <button type="button" className="secondary-action" style={{ padding: '4px 10px', fontSize: '0.8rem' }} disabled={userListPage === totalPages} onClick={() => setUserListPage(p => p + 1)}>&#8250;</button>
+                            <button type="button" className="secondary-action" style={{ padding: '4px 10px', fontSize: '0.8rem' }} disabled={userListPage === totalPages} onClick={() => setUserListPage(totalPages)}>&#187;</button>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               ) : adminPage === 'report' && canManageAdmin ? (
