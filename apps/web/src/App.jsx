@@ -484,7 +484,7 @@ function App() {
         setNotice(`Login berhasil, tetapi dashboard gagal dimuat: ${getErrorMessage(error, 'Tidak dapat memuat data admin')}`)
       }
     } catch (error) {
-      setNotice(getErrorMessage(error, 'Login gagal'))
+      setNotice(getErrorMessage(error, 'Nomor HP atau password salah.'))
     } finally {
       setLoadingAdmin(false)
     }
