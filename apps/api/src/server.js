@@ -315,7 +315,7 @@ app.get('/api/health', (_req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const parsed = loginSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ message: 'Payload login tidak valid', errors: parsed.error.flatten() })
+    return res.status(400).json({ message: 'Nomor HP dan password wajib diisi.' })
   }
 
   const user = db.prepare(`
