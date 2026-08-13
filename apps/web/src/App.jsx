@@ -480,7 +480,7 @@ function App() {
 
       try {
         await loadAdminBootstrap(nextAuth.token, data.user.role)
-        setNotice(`Login sebagai ${data.user.name} (${data.user.role}) berhasil.`)
+        setNotice(`Login berhasil, tetapi dashboard gagal dimuat: ${getErrorMessage(error, 'Tidak dapat memuat data admin')}`)
       } catch (error) {
         setNotice(`Login berhasil, tetapi dashboard gagal dimuat: ${getErrorMessage(error, 'Tidak dapat memuat data admin')}`)
       }
@@ -1337,7 +1337,7 @@ function App() {
     setActiveDailyQrs([])
     setBackupRestoreFile(null)
     setMode('crew')
-    setNotice('Logout berhasil.')
+    // setNotice('Logout berhasil.')
   }
 
   // Derived values for project list with search + pagination (change #5)
@@ -1535,9 +1535,8 @@ function App() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Fixed left sidebar */}
       <div style={sidebarStyle}>
-        <div style={{ padding: '18px 18px 10px', borderBottom: '1.5px solid var(--line-strong)' }}>
-          <p style={{ fontSize: '0.7rem', color: '#9aacbb', margin: 0, marginBottom: 2 }}>Crew Management PV</p>
-          <p style={{ fontSize: '0.82rem', fontWeight: 700, color: '#102031', margin: 0 }}>Dashboard</p>
+        <div style={{ padding: '14px 18px', borderBottom: '1.5px solid var(--line-strong)', display: 'flex', alignItems: 'center' }}>
+          <img src="/emaki-logo.png" alt="Logo" style={{ height: 32, width: 'auto', display: 'block' }} />
         </div>
 
         <nav style={{ flex: 1, paddingTop: 8 }}>
