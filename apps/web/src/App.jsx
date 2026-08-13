@@ -624,7 +624,7 @@ function App() {
       }, { headers: authHeader() })
       setUserForm({ name: '', ktp: '', phone: '', role: 'CREW', password: '' })
       await loadAdminBootstrap()
-      setNotice('User baru berhasil ditambahkan.')
+      showToast('User baru berhasil ditambahkan.', 'success')
       showToast('User berhasil ditambahkan', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menambah user'))
@@ -678,7 +678,7 @@ function App() {
       }, { headers: authHeader() })
       setProjectForm({ code: '', name: '', picUserId: '' })
       await loadAdminBootstrap()
-      setNotice('Project berhasil dibuat.')
+      showToast('Project berhasil dibuat.', 'success')
       showToast('Project berhasil ditambahkan', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal membuat project'))
@@ -709,7 +709,7 @@ function App() {
 
       await loadAdminBootstrap()
       cancelEditProject()
-      setNotice('Project berhasil diubah.')
+      showToast('Project berhasil diubah.', 'success')
       showToast('Project berhasil diubah', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal mengubah project'))
@@ -728,7 +728,7 @@ function App() {
       })
 
       await loadAdminBootstrap()
-      setNotice('Project berhasil dihapus.')
+      showToast('Project berhasil dihapus.', 'success')
       showToast('Project berhasil dihapus', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menghapus project'))
@@ -759,7 +759,7 @@ function App() {
         await loadProjectCrew(assignmentForm.projectId)
         await loadProjectAssignments(assignmentForm.projectId)
       }
-      setNotice('Assignment project berhasil disimpan.')
+      showToast('Assignment project berhasil disimpan.', 'success')
       showToast('Assignment project berhasil disimpan', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menyimpan assignment'))
@@ -775,7 +775,7 @@ function App() {
       }, { headers: authHeader() })
       setQrResult(data)
       await loadActiveDailyQrs()
-      setNotice('QR harian berhasil dibuat.')
+      showToast('QR harian berhasil dibuat.', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal membuat QR harian'))
     }
@@ -796,7 +796,7 @@ function App() {
         setQrResult(null)
       }
       await loadActiveDailyQrs()
-      setNotice('QR harian berhasil dihapus.')
+      showToast('QR harian berhasil dihapus.', 'success')
       showToast('QR harian berhasil dihapus', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menghapus QR harian'))
@@ -869,7 +869,7 @@ function App() {
         projectId: reportForm.projectId || undefined,
         date: reportForm.date,
       })
-      setNotice('Report berhasil dimuat ulang.')
+      showToast('Report berhasil dimuat ulang.', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal memuat report'))
     }
@@ -920,7 +920,7 @@ function App() {
         startDate: summaryForm.startDate,
         endDate: summaryForm.endDate,
       })
-      setNotice('Rangkuman berhasil dimuat ulang.')
+      showToast('Rangkuman berhasil dimuat ulang.', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal memuat rangkuman'))
     }
@@ -934,7 +934,7 @@ function App() {
         startDate: summaryForm.startDate,
         endDate: summaryForm.endDate,
       })
-      setNotice('Detail absen berhasil dimuat ulang.')
+      showToast('Detail absen berhasil dimuat ulang.', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal memuat detail absen'))
     }
@@ -1100,7 +1100,6 @@ function App() {
       }
 
       await loadAdminBootstrap()
-      setNotice(data?.message || 'Restore backup berhasil')
       showToast('Restore backup berhasil', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal restore backup'))
@@ -1239,7 +1238,6 @@ function App() {
       
       setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
       setShowChangePasswordModal(false)
-      setNotice('Password berhasil diubah')
       showToast('Password berhasil diubah', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal mengubah password'))
@@ -1273,7 +1271,6 @@ function App() {
       await loadProjectAssignments(String(assignment.project_id))
       await loadProjectCrew(String(assignment.project_id))
       cancelEditProjectAssignment()
-      setNotice('Assignment berhasil diubah.')
       showToast('Assignment berhasil diubah', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal mengubah assignment'))
@@ -1293,7 +1290,6 @@ function App() {
 
       await loadProjectAssignments(String(assignment.project_id))
       await loadProjectCrew(String(assignment.project_id))
-      setNotice('Assignment berhasil dihapus.')
       showToast('Assignment berhasil dihapus', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menghapus assignment'))
@@ -1315,7 +1311,6 @@ function App() {
       if (canManageAdmin) {
         await loadReports({ projectId: overtimeForm.projectId, date: overtimeForm.assignmentDate })
       }
-      setNotice('Data lembur berhasil dihapus.')
       showToast('Data lembur berhasil dihapus', 'success')
     } catch (error) {
       setNotice(getErrorMessage(error, 'Gagal menghapus data lembur'))
