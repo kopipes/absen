@@ -2518,22 +2518,22 @@ function App() {
                     <p className="section-label">Session</p>
                     <h2 style={{ marginBottom: 2 }}>{authState.user?.name}</h2>
                     <p className="hint" style={{ marginBottom: 16 }}>{authState.user?.role} &middot; {dayjs().format('dddd, DD MMM YYYY')}</p>
-                    <div className="stats-row">
-                      <div>
-                        <strong>{adminData.projects.length}</strong>
-                        <span>Projects</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.projects.length}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Projects</div>
                       </div>
-                      <div>
-                        <strong>{adminData.users.length}</strong>
-                        <span>Users</span>
+                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.users.length}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Users</div>
                       </div>
-                      <div>
-                        <strong>{projectCrew.length}</strong>
-                        <span>Crew aktif</span>
+                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{projectCrew.length}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Crew aktif</div>
                       </div>
-                      <div>
-                        <strong>{activeDailyQrs.length}</strong>
-                        <span>QR aktif</span>
+                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: activeDailyQrs.length > 0 ? '#16a34a' : 'var(--brand)', lineHeight: 1 }}>{activeDailyQrs.length}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>QR aktif</div>
                       </div>
                     </div>
                   </div>
