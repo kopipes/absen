@@ -1532,10 +1532,19 @@ function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 99, display: 'none' }}
+          className="mobile-overlay"
+        />
+      )}
+
       {/* Fixed left sidebar */}
-      <div style={sidebarStyle}>
-        <div style={{ padding: '14px 18px', borderBottom: '1.5px solid var(--line-strong)', display: 'flex', alignItems: 'center' }}>
-          <img src="/emaki-logo.png" alt="Logo" style={{ height: 32, width: 'auto', display: 'block' }} />
+      <div style={{ ...sidebarStyle, transform: undefined }} className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
+        <div style={{ padding: '20px 18px 16px', borderBottom: '1.5px solid var(--line-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img src="/emaki-logo.png" alt="Logo" style={{ height: 44, width: 'auto', display: 'block' }} />
         </div>
 
         <nav style={{ flex: 1, paddingTop: 8 }}>
@@ -1610,7 +1619,19 @@ function App() {
       </div>
 
       {/* Main content area */}
-      <div style={{ marginLeft: 220, flex: 1, minWidth: 0 }}>
+      <div style={{ marginLeft: 220, flex: 1, minWidth: 0 }} className="main-content-area">
+        {/* Mobile topbar */}
+        <div className="mobile-topbar-bar">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((o) => !o)}
+            style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', padding: '0 4px', color: '#3d5166', lineHeight: 1 }}
+            aria-label="Toggle menu"
+          >
+            ☰
+          </button>
+          <img src="/emaki-logo.png" alt="Logo" style={{ height: 28, width: 'auto' }} />
+        </div>
         {toasts.length > 0 && (
           <div className="toast-stack" role="status" aria-live="polite">
             {toasts.map((toast) => (
@@ -2495,20 +2516,24 @@ function App() {
                 <div className="grid">
                   <div className="card hero-card">
                     <p className="section-label">Session</p>
-                    <h2>{authState.user?.name}</h2>
-                    <p className="hint">Role: {authState.user?.role}</p>
+                    <h2 style={{ marginBottom: 2 }}>{authState.user?.name}</h2>
+                    <p className="hint" style={{ marginBottom: 16 }}>{authState.user?.role} &middot; {dayjs().format('dddd, DD MMM YYYY')}</p>
                     <div className="stats-row">
                       <div>
                         <strong>{adminData.projects.length}</strong>
-                        <span>Project</span>
+                        <span>Projects</span>
                       </div>
                       <div>
                         <strong>{adminData.users.length}</strong>
-                        <span>User</span>
+                        <span>Users</span>
                       </div>
                       <div>
                         <strong>{projectCrew.length}</strong>
                         <span>Crew aktif</span>
+                      </div>
+                      <div>
+                        <strong>{activeDailyQrs.length}</strong>
+                        <span>QR aktif</span>
                       </div>
                     </div>
                   </div>
