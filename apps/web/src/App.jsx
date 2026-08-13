@@ -2521,8 +2521,8 @@ function App() {
                         <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Users</div>
                       </div>
                       <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{projectCrew.length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Crew aktif</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{nonAdminUsers.length}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Crew</div>
                       </div>
                       <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: '1.8rem', fontWeight: 800, color: activeDailyQrs.length > 0 ? '#16a34a' : 'var(--brand)', lineHeight: 1 }}>{activeDailyQrs.length}</div>
