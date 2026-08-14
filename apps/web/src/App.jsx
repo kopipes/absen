@@ -2117,8 +2117,8 @@ function App() {
                     <p className="section-label">Assignment</p>
                     <h2>Assign user ke project</h2>
                     <label>Project</label>
-                    <ProjectSelect
-                      projects={adminData.projects}
+                     <ProjectSelect
+                      projects={adminData.projects.filter(p => p.isActive)}
                       value={assignmentForm.projectId}
                       onChange={async (v) => {
                         setAssignmentForm((c) => ({ ...c, projectId: v }))
@@ -2149,8 +2149,8 @@ function App() {
                     </div>
 
                     <form className="filter-row" onSubmit={(event) => event.preventDefault()}>
-                      <ProjectSelect
-                        projects={adminData.projects}
+                       <ProjectSelect
+                        projects={adminData.projects.filter(p => p.isActive)}
                         value={assignmentForm.projectId}
                         onChange={async (v) => {
                           setAssignmentForm((c) => ({ ...c, projectId: v }))
@@ -2223,7 +2223,7 @@ function App() {
                     <h2>Assign crew lembur</h2>
                     <label>Project</label>
                     <ProjectSelect
-                      projects={adminData.projects}
+                      projects={adminData.projects.filter(p => p.isActive)}
                       value={overtimeForm.projectId}
                       onChange={async (v) => {
                         setOvertimeForm((c) => ({ ...c, projectId: v, userIds: [] }))
@@ -2326,7 +2326,7 @@ function App() {
                     <h2>Assign crew lembur</h2>
                     <label>Project</label>
                     <ProjectSelect
-                      projects={adminData.projects}
+                      projects={adminData.projects.filter(p => p.isActive)}
                       value={overtimeForm.projectId}
                       onChange={async (v) => {
                         setOvertimeForm((c) => ({ ...c, projectId: v, userIds: [] }))
@@ -2573,7 +2573,7 @@ function App() {
                     <h2>Generate akses crew</h2>
                     <label>Project</label>
                     <ProjectSelect
-                      projects={adminData.projects}
+                       projects={adminData.projects.filter(p => p.isActive)}
                       value={qrForm.projectId}
                       onChange={(v) => setQrForm((c) => ({ ...c, projectId: v }))}
                       placeholder="Pilih project"
