@@ -2547,28 +2547,24 @@ function App() {
                     <p className="section-label">Session</p>
                     <h2 style={{ marginBottom: 2 }}>{authState.user?.name}</h2>
                     <p className="hint" style={{ marginBottom: 16 }}>{authState.user?.role} &middot; {dayjs().format('dddd, DD MMM YYYY')}</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.projects.filter(p => p.isActive).length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Project Aktif</div>
-                      </div>
-                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.projects.length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Project</div>
-                      </div>
-                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{adminData.users.length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Users</div>
-                      </div>
-                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }}>{nonAdminUsers.length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Crew</div>
-                      </div>
-                      <div style={{ background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: activeDailyQrs.length > 0 ? '#16a34a' : 'var(--brand)', lineHeight: 1 }}>{activeDailyQrs.length}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>QR aktif</div>
-                      </div>
-                    </div>
+                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                       {(() => {
+                         const activeProjectNames = new Set(adminData.projects.filter(p => p.isActive).map(p => p.name))
+                         const crewAktif = nonAdminUsers.filter(u => u.projectNames && u.projectNames.some(n => activeProjectNames.has(n))).length
+                         const statStyle = { background: '#f7f9fb', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }
+                         const numStyle = { fontSize: '1.8rem', fontWeight: 800, color: 'var(--brand)', lineHeight: 1 }
+                         const lblStyle = { fontSize: '0.72rem', color: 'var(--ink-3)', fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }
+                         return (
+                           <>
+                             <div style={statStyle}><div style={numStyle}>{adminData.projects.length}</div><div style={lblStyle}>Total Project</div></div>
+                             <div style={statStyle}><div style={numStyle}>{adminData.projects.filter(p => p.isActive).length}</div><div style={lblStyle}>Project Aktif</div></div>
+                             <div style={statStyle}><div style={numStyle}>{nonAdminUsers.length}</div><div style={lblStyle}>Crew Terdaftar</div></div>
+                             <div style={statStyle}><div style={numStyle}>{crewAktif}</div><div style={lblStyle}>Crew Aktif</div></div>
+                             <div style={{ ...statStyle, gridColumn: 'span 2' }}><div style={{ ...numStyle, color: activeDailyQrs.length > 0 ? '#16a34a' : 'var(--brand)' }}>{activeDailyQrs.length}</div><div style={lblStyle}>QR Aktif</div></div>
+                           </>
+                         )
+                       })()}
+                     </div>
                   </div>
 
                   <form className="card" onSubmit={generateQr}>
