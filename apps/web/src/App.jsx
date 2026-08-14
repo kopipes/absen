@@ -2560,7 +2560,8 @@ function App() {
                              <div style={statStyle}><div style={numStyle}>{adminData.projects.filter(p => p.isActive).length}</div><div style={lblStyle}>Project Aktif</div></div>
                              <div style={statStyle}><div style={numStyle}>{nonAdminUsers.length}</div><div style={lblStyle}>Crew Terdaftar</div></div>
                              <div style={statStyle}><div style={numStyle}>{crewAktif}</div><div style={lblStyle}>Crew Aktif</div></div>
-                             <div style={{ ...statStyle, gridColumn: 'span 2' }}><div style={{ ...numStyle, color: activeDailyQrs.length > 0 ? '#16a34a' : 'var(--brand)' }}>{activeDailyQrs.length}</div><div style={lblStyle}>QR Aktif</div></div>
+                             <div style={{ ...statStyle, gridColumn: 'span 1' }}><div style={{ ...numStyle, color: activeDailyQrs.length > 0 ? '#16a34a' : 'var(--brand)' }}>{activeDailyQrs.length}</div><div style={lblStyle}>QR Aktif</div></div>
+                             <div style={{ ...statStyle, background: 'transparent', border: '1px dashed var(--border)', opacity: 0.4 }}></div>
                            </>
                          )
                        })()}
